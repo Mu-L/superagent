@@ -71,6 +71,11 @@ exports.cleanHeader = (header, changesOrigin) => {
   return header;
 };
 
+exports.normalizeHostname = (hostname) => {
+  const [,normalized] = hostname.match(/^\[([^\]]+)\]$/) || [];
+  return normalized || hostname;
+};
+
 /**
  * Check if `obj` is an object.
  *
