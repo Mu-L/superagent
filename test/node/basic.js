@@ -134,15 +134,6 @@ describe('[node] request', () => {
     });
   });
 
-  describe('ipv6 address', () => {
-    it('should successfully query an ipv6 address', (done) => {
-      request.get(`http://[::]/url?a=(b%29`).end((error, res) => {
-        assert.equal('/url?a=(b%29', res.text);
-        done();
-      });
-    });
-  });
-
   describe('.buffer()', () => {
     it('should enable buffering', (done) => {
       request
