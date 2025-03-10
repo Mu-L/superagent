@@ -21,6 +21,10 @@ function setProtocol(protocol) {
   };
 }
 
+function normalizeIpv6Host(host) {
+  return net.isIP(host) === 6 ? `[${host}]` : host;
+}
+
 class Request extends Stream {
   constructor(protocol, options) {
     super();
@@ -48,11 +52,12 @@ class Request extends Stream {
 
     this._headers = {};
 
+    const normalizedHost = normalizeIpv6Host(host);
     const session = http2.connect(
-      `${protocol}//${host}:${port}`,
+      `${protocol}//${normalizedHost}:${port}`,
       sessionOptions
     );
-    this.setHeader('host', `${host}:${port}`);
+    this.setHeader('host', `${normalizedHost}:${port}`);
 
     session.on('error', (error) => this.emit('error', error));
 

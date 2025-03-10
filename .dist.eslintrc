@@ -17,6 +17,7 @@
     "no-undef": "off",
     "no-unused-vars": "off",
     "no-useless-escape": "off",
+    "no-obj-calls": "off",
     "no-cond-assign": "off",
     "no-redeclare": "off",
     "node/no-exports-assign": "off",
