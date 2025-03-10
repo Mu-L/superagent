@@ -134,23 +134,21 @@ describe('[node] request', () => {
     });
   });
 
-  if (doesntWorkInHttp2) {
-    describe('ipv6 address', () => {
-      it('should successfully query an ipv6 address', (done) => {
-        request.get(`http://[::]:${process.env.ZUUL_PORT}/url?a=(b%29`).end((error, res) => {
-          assert.equal('/url?a=(b%29', res.text);
-          done();
-        });
-      });
-
-      it('should successfully query an ipv6 address', (done) => {
-        request.get(`http://[::1]:${process.env.ZUUL_PORT}/url?a=(b%29`).end((error, res) => {
-          assert.equal('/url?a=(b%29', res.text);
-          done();
-        });
+  describe('ipv6 address', () => {
+    it('should successfully query an ipv6 address', (done) => {
+      request.get(`http://[::]:${process.env.ZUUL_PORT}/url?a=(b%29`).end((error, res) => {
+        assert.equal('/url?a=(b%29', res.text);
+        done();
       });
     });
-  }
+
+    it('should successfully query an ipv6 address', (done) => {
+      request.get(`http://[::1]:${process.env.ZUUL_PORT}/url?a=(b%29`).end((error, res) => {
+        assert.equal('/url?a=(b%29', res.text);
+        done();
+      });
+    });
+  });
 
   describe('.buffer()', () => {
     it('should enable buffering', (done) => {
