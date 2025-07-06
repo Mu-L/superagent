@@ -78,6 +78,7 @@ class Agent extends AgentBase {
 
 for (const name of methods) {
   const method = name.toUpperCase();
+  if (method === "QUERY") continue;
   Agent.prototype[name] = function (url, fn) {
     const request_ = new request.Request(method, url);
 
