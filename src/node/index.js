@@ -1073,7 +1073,45 @@ Request.prototype._end = function () {
         buffer = true;
       } else if (multipart) {
         const form = formidable.formidable();
-        parser = form.parse.bind(form);
+        parser = (res, callback) => {
+          // Create a PassThrough stream that acts as a proper HTTP request
+          const bridgeStream = new Stream.PassThrough();
+
+          // Add HTTP request properties from the current request context
+          bridgeStream.method = this.method || 'POST';
+          bridgeStream.url = this.url || '/';
+          bridgeStream.httpVersion = res.httpVersion || '1.1';
+          bridgeStream.headers = res.headers || {};
+          bridgeStream.socket = res.socket || { readable: true };
+
+          // Pipe the response data through the bridge stream
+          res.pipe(bridgeStream);
+
+          form.parse(bridgeStream, (err, fields, files) => {
+            if (err) return callback(err);
+
+            // Formidable v3 always returns arrays, but SuperAgent expects single values
+            // Flatten single-item arrays to maintain backward compatibility
+            const flattenedFields = {};
+            if (fields) {
+              for (const key in fields) {
+                const value = fields[key];
+                flattenedFields[key] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+              }
+            }
+
+            const flattenedFiles = {};
+            if (files) {
+              for (const key in files) {
+                const value = files[key];
+                flattenedFiles[key] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+              }
+            }
+
+            // Return flattened fields as the object parameter to match SuperAgent's expected format
+            callback(null, flattenedFields, flattenedFiles);
+          });
+        };
         buffer = true;
       } else if (isBinary(mime)) {
         parser = exports.parse.image;
@@ -1141,31 +1179,6 @@ Request.prototype._end = function () {
           }
 
           if (parserHandlesEnd) {
-            if (multipart) {
-              // formidable v3 always returns an array with the value in it
-              // so we need to flatten it
-              if (object) {
-                for (const key in object) {
-                  const value = object[key];
-                  if (Array.isArray(value) && value.length === 1) {
-                    object[key] = value[0];
-                  } else {
-                    object[key] = value;
-                  }
-                }
-              }
-
-              if (files) {
-                for (const key in files) {
-                  const value = files[key];
-                  if (Array.isArray(value) && value.length === 1) {
-                    files[key] = value[0];
-                  } else {
-                    files[key] = value;
-                  }
-                }
-              }
-            }
             this.emit('end');
             this.callback(null, this._emitResponse(object, files));
           }
