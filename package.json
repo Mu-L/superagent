@@ -32,12 +32,9 @@
     "@babel/cli": "^7.20.7",
     "@babel/core": "^7.20.12",
     "@babel/plugin-transform-runtime": "^7.19.6",
-    "@babel/preset-env": "^7.20.2",
-    "@babel/runtime": "^7.20.13",
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1",
-    "babelify": "^10.0.0",
+    "@babel/preset-env": "^7.23.6",
     "Base64": "^1.1.0",
+    "babelify": "^10.0.0",
     "basic-auth-connect": "^1.0.0",
     "body-parser": "^1.20.1",
     "browserify": "^17.0.0",
@@ -51,8 +48,6 @@
     "express-session": "^1.17.3",
     "fixpack": "^4.0.0",
     "get-port": "4.2.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.1.2",
     "marked": "^4.2.12",
     "mocha": "^6.2.3",
     "multer": "1.4.5-lts.1",
@@ -125,8 +120,7 @@
     "minify": "cross-env NODE_ENV=production browserify src/node/index.js -o dist/superagent.min.js -s superagent -g [ babelify --configFile ./.dist.babelrc ] -p tinyify",
     "nyc": "cross-env NODE_ENV=test nyc ava",
     "test": "npm run build && npm run lint && make test",
-    "test-http2": "npm run build && npm run lint && make test-node-http2",
-    "prepare": "husky"
+    "test-http2": "npm run build && npm run lint && make test-node-http2"
   },
   "unpkg": "dist/superagent.min.js"
 }
