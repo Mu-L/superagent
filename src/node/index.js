@@ -1146,15 +1146,15 @@ Request.prototype._end = function () {
       res.on('data', (buf) => {
         responseBytesLeft -= buf.byteLength || buf.length > 0 ? buf.length : 0;
         if (responseBytesLeft < 0) {
-          // This will propagate through error event
           const error = new Error('Maximum response size reached');
           error.code = 'ETOOLARGE';
           // Parsers aren't required to observe error event,
           // so would incorrectly report success
           parserHandlesEnd = false;
-          // Will not emit error event
-          res.destroy(error);
-          // so we do callback now
+          // Destroy without an error: IncomingMessage.destroy(err) emits
+          // 'error', and the parser may also fail, each of which would
+          // call callback() again ("superagent: double callback bug").
+          res.destroy();
           this.callback(error, null);
         }
       });
@@ -1167,8 +1167,8 @@ Request.prototype._end = function () {
         parserHandlesEnd = buffer;
 
         parser(res, (error, object, files) => {
-          if (this.timedout) {
-            // Timeout has already handled all callbacks
+          if (this.timedout || this.called) {
+            // Timeout or maxResponseSize has already handled all callbacks
             return;
           }
 

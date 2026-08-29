@@ -121,17 +121,34 @@ describe('zlib', () => {
   });
 
   it('should protect from zip bombs', (done) => {
+    const warns = [];
+    const { warn } = console;
+    console.warn = function (...args) {
+      warns.push(args.join(' '));
+    };
+
     request
       .get(base)
       .buffer(true)
       .maxResponseSize(1)
-      .end((error, res) => {
-        try {
-          assert.equal('Maximum response size reached', error && error.message);
-          done();
-        } catch (err) {
-          done(err);
-        }
+      .end((error) => {
+        setImmediate(() => {
+          console.warn = warn;
+          try {
+            assert.equal(
+              'Maximum response size reached',
+              error && error.message
+            );
+            assert.equal(
+              warns.some((line) => /double callback/.test(line)),
+              false,
+              `unexpected warning(s): ${warns.join('; ')}`
+            );
+            done();
+          } catch (err) {
+            done(err);
+          }
+        });
       });
   });
 
