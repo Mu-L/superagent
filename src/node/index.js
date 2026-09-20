@@ -63,6 +63,53 @@ exports.agent = require('./agent');
 function noop() {}
 
 /**
+ * Close an underlying Node request/session created during setup.
+ *
+ * Used when header application or later request-path work throws after
+ * `http.request()` / `http2.connect()` has already allocated a socket.
+ *
+ * @param {Request} request_
+ * @api private
+ */
+function disposeNodeRequest(request_) {
+  const { req } = request_;
+  if (!req || request_._requestDisposed) {
+    return;
+  }
+
+  request_._requestDisposed = true;
+
+  try {
+    // HTTP/2 wrapper keeps a session open as soon as request() is called.
+    // Prefer destroying that session so we never call abort() → getFrame()
+    // with invalid headers (which would emit a late protocol error).
+    if (req.session && typeof req.session.destroy === 'function') {
+      req.session.destroy();
+    }
+
+    if (req.socket && typeof req.socket.destroy === 'function') {
+      req.socket.destroy();
+    }
+
+    if (typeof req.destroy === 'function') {
+      req.destroy();
+      return;
+    }
+
+    if (typeof req.abort === 'function') {
+      req.abort();
+      return;
+    }
+
+    if (typeof req.end === 'function') {
+      req.end();
+    }
+  } catch (err) {
+    debug('error disposing request after setup failure', err);
+  }
+}
+
+/**
  * Expose `Response`.
  */
 
@@ -755,6 +802,14 @@ Request.prototype.request = function () {
   options.port = url.port;
   options.path = path;
   options.host = utils.normalizeHostname(url.hostname); // ex: [::1] -> ::1
+  // Apply user headers before connecting so invalid values (e.g. undefined)
+  // throw without allocating a TCP handle. See #1827.
+  // HTTP/2's wrapper forwards leftover options to http2.connect(), so only
+  // do this on HTTP/1.
+  if (!this._enableHttp2) {
+    options.headers = { ...this.header };
+  }
+
   options.ca = this._ca;
   options.key = this._key;
   options.pfx = this._pfx;
@@ -788,26 +843,13 @@ Request.prototype.request = function () {
   this.req = module_.request(options);
   const { req } = this;
 
-  // set tcp no delay
-  req.setNoDelay(true);
-
-  if (options.method !== 'HEAD') {
-    req.setHeader('Accept-Encoding', 'gzip, deflate');
-  }
-
-  this.protocol = protocol;
-  this.host = url.host;
-
-  // expose events
-  req.once('drain', () => {
-    this.emit('drain');
-  });
-
+  // Attach this before header setup so destroy() during a setup exception
+  // cannot emit an unhandled 'error' (or a second callback).
   req.on('error', (error) => {
     // flag abortion here for out timeouts
     // because node will emit a faux-error "socket hang up"
     // when request is aborted before a connection is made
-    if (this._aborted) return;
+    if (this._aborted || this._requestDisposed) return;
     // if not the same, we are in the **old** (cancelled) request,
     // so need to continue (same as for above)
     if (this._retries !== retries) return;
@@ -817,36 +859,83 @@ Request.prototype.request = function () {
     this.callback(error);
   });
 
-  // auth
-  if (url.username || url.password) {
-    this.auth(url.username, url.password);
-  }
+  try {
+    // set tcp no delay
+    req.setNoDelay(true);
 
-  if (this.username && this.password) {
-    this.auth(this.username, this.password);
-  }
-
-  for (const key in this.header) {
-    if (hasOwn(this.header, key)) req.setHeader(key, this.header[key]);
-  }
-
-  // add cookies
-  if (this.cookies) {
-    if (hasOwn(this._header, 'cookie')) {
-      // merge
-      const temporaryJar = new CookieJar.CookieJar();
-      temporaryJar.setCookies(this._header.cookie.split('; '));
-      temporaryJar.setCookies(this.cookies.split('; '));
-      req.setHeader(
-        'Cookie',
-        temporaryJar.getCookies(CookieJar.CookieAccessInfo.All).toValueString()
-      );
-    } else {
-      req.setHeader('Cookie', this.cookies);
+    if (options.method !== 'HEAD') {
+      req.setHeader('Accept-Encoding', 'gzip, deflate');
     }
+
+    this.protocol = protocol;
+    this.host = url.host;
+
+    // expose events
+    req.once('drain', () => {
+      this.emit('drain');
+    });
+
+    // auth
+    if (url.username || url.password) {
+      this.auth(url.username, url.password);
+    }
+
+    if (this.username && this.password) {
+      this.auth(this.username, this.password);
+    }
+
+    for (const key in this.header) {
+      if (hasOwn(this.header, key)) req.setHeader(key, this.header[key]);
+    }
+
+    // add cookies
+    if (this.cookies) {
+      if (hasOwn(this._header, 'cookie')) {
+        // merge
+        const temporaryJar = new CookieJar.CookieJar();
+        temporaryJar.setCookies(this._header.cookie.split('; '));
+        temporaryJar.setCookies(this.cookies.split('; '));
+        req.setHeader(
+          'Cookie',
+          temporaryJar
+            .getCookies(CookieJar.CookieAccessInfo.All)
+            .toValueString()
+        );
+      } else {
+        req.setHeader('Cookie', this.cookies);
+      }
+    }
+
+    return req;
+  } catch (err) {
+    disposeNodeRequest(this);
+    throw err;
+  }
+};
+
+/**
+ * Abort/end the Node request if it was created.
+ *
+ * @api private
+ */
+Request.prototype._disposeRequest = function () {
+  disposeNodeRequest(this);
+};
+
+/**
+ * Report a setup/request-path error without leaving the socket open.
+ *
+ * @param {Error} error
+ * @api private
+ */
+Request.prototype._failRequest = function (error) {
+  this._disposeRequest();
+  if (typeof this._callback === 'function' && this._callback !== noop) {
+    this.callback(error);
+    return;
   }
 
-  return req;
+  throw error;
 };
 
 /**
@@ -962,7 +1051,19 @@ Request.prototype._emitRedirect = function () {
 };
 
 Request.prototype.end = function (fn) {
-  this.request();
+  try {
+    this.request();
+  } catch (err) {
+    this._endCalled = true;
+    if (typeof fn === 'function') {
+      this._callback = fn;
+      this.callback(err);
+      return;
+    }
+
+    throw err;
+  }
+
   debug('%s %s', this.method, this.url);
 
   if (this._endCalled) {
@@ -993,25 +1094,29 @@ Request.prototype._end = function () {
 
   // body
   if (method !== 'HEAD' && !req._headerSent) {
-    // serialize stuff
-    if (typeof data !== 'string') {
-      let contentType = req.getHeader('Content-Type');
-      // Parse out just the content type from the header (ignore the charset)
-      if (contentType) contentType = contentType.split(';')[0];
-      let serialize = this._serializer || exports.serialize[contentType];
-      if (!serialize && isJSON(contentType)) {
-        serialize = exports.serialize['application/json'];
+    try {
+      // serialize stuff
+      if (typeof data !== 'string') {
+        let contentType = req.getHeader('Content-Type');
+        // Parse out just the content type from the header (ignore the charset)
+        if (contentType) contentType = contentType.split(';')[0];
+        let serialize = this._serializer || exports.serialize[contentType];
+        if (!serialize && isJSON(contentType)) {
+          serialize = exports.serialize['application/json'];
+        }
+
+        if (serialize) data = serialize(data);
       }
 
-      if (serialize) data = serialize(data);
-    }
-
-    // content-length
-    if (data && !req.getHeader('Content-Length')) {
-      req.setHeader(
-        'Content-Length',
-        Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data)
-      );
+      // content-length
+      if (data && !req.getHeader('Content-Length')) {
+        req.setHeader(
+          'Content-Length',
+          Buffer.isBuffer(data) ? data.length : Buffer.byteLength(data)
+        );
+      }
+    } catch (err) {
+      return this._failRequest(err);
     }
   }
 
@@ -1261,34 +1366,38 @@ Request.prototype._end = function () {
     return chunking;
   };
 
-  // if a FormData instance got created, then we send that as the request body
-  const formData = this._formData;
-  if (formData) {
-    // set headers
-    const headers = formData.getHeaders();
-    for (const i in headers) {
-      if (hasOwn(headers, i)) {
-        debug('setting FormData header: "%s: %s"', i, headers[i]);
-        req.setHeader(i, headers[i]);
+  try {
+    // if a FormData instance got created, then we send that as the request body
+    const formData = this._formData;
+    if (formData) {
+      // set headers
+      const headers = formData.getHeaders();
+      for (const i in headers) {
+        if (hasOwn(headers, i)) {
+          debug('setting FormData header: "%s: %s"', i, headers[i]);
+          req.setHeader(i, headers[i]);
+        }
       }
+
+      // attempt to get "Content-Length" header
+      formData.getLength((error, length) => {
+        // TODO: Add chunked encoding when no length (if err)
+        if (error) debug('formData.getLength had error', error, length);
+
+        debug('got FormData Content-Length: %s', length);
+        if (typeof length === 'number') {
+          req.setHeader('Content-Length', length);
+        }
+
+        formData.pipe(getProgressMonitor()).pipe(req);
+      });
+    } else if (Buffer.isBuffer(data)) {
+      bufferToChunks(data).pipe(getProgressMonitor()).pipe(req);
+    } else {
+      req.end(data);
     }
-
-    // attempt to get "Content-Length" header
-    formData.getLength((error, length) => {
-      // TODO: Add chunked encoding when no length (if err)
-      if (error) debug('formData.getLength had error', error, length);
-
-      debug('got FormData Content-Length: %s', length);
-      if (typeof length === 'number') {
-        req.setHeader('Content-Length', length);
-      }
-
-      formData.pipe(getProgressMonitor()).pipe(req);
-    });
-  } else if (Buffer.isBuffer(data)) {
-    bufferToChunks(data).pipe(getProgressMonitor()).pipe(req);
-  } else {
-    req.end(data);
+  } catch (err) {
+    this._failRequest(err);
   }
 };
 
