@@ -2,13 +2,13 @@
  * Module dependencies.
  */
 
-const { format } = require('url');
-const Stream = require('stream');
-const https = require('https');
-const http = require('http');
-const fs = require('fs');
-const zlib = require('zlib');
-const util = require('util');
+const { format } = require('node:url');
+const Stream = require('node:stream');
+const https = require('node:https');
+const http = require('node:http');
+const fs = require('node:fs');
+const zlib = require('node:zlib');
+const util = require('node:util');
 const qs = require('qs');
 const mime = require('mime');
 let methods = require('methods');
@@ -110,6 +110,50 @@ function disposeNodeRequest(request_) {
 }
 
 /**
+ * Preserve dot-only path segments that WHATWG URL normalizes away.
+ *
+ * @param {String} urlString
+ * @returns {{urlString: String, restorePath: Function}}
+ * @api private
+ */
+function preserveDotSegments(urlString) {
+  const parts = urlString.match(
+    /^([a-z][a-z\d+.-]*:\/\/[^/?#]*)([^?#]*)(.*)$/i
+  );
+  if (!parts) {
+    return {
+      urlString,
+      restorePath(path) {
+        return path;
+      }
+    };
+  }
+
+  const segments = [];
+  const prefix = '__superagent_dot_segment_';
+  const path = parts[2].replace(
+    /\/((?:\.|%2e){1,2})(?=\/|$)/gi,
+    (_, segment) => {
+      const marker = `${prefix}${segments.length}__`;
+      segments.push(segment);
+      return `/${marker}`;
+    }
+  );
+
+  return {
+    urlString: `${parts[1]}${path}${parts[3]}`,
+    restorePath(requestPath) {
+      let restoredPath = requestPath;
+      for (const [index, segment] of segments.entries()) {
+        restoredPath = restoredPath.replace(`${prefix}${index}__`, segment);
+      }
+
+      return restoredPath;
+    }
+  };
+}
+
+/**
  * Expose `Response`.
  */
 
@@ -146,10 +190,12 @@ exports.protocols = {
  */
 
 exports.serialize = {
-  'application/x-www-form-urlencoded': (obj) => {
-    return qs.stringify(obj, { indices: false, strictNullHandling: true });
+  'application/x-www-form-urlencoded'(object) {
+    return qs.stringify(object, { indices: false, strictNullHandling: true });
   },
-  'application/json': safeStringify
+  'application/json': safeStringify,
+  // CSP reports carry JSON bodies but use a distinct registered media type.
+  'application/csp-report': safeStringify
 };
 
 /**
@@ -347,6 +393,17 @@ Request.prototype._getFormData = function () {
  */
 
 Request.prototype.agent = function (agent) {
+  if (
+    arguments.length > 0 &&
+    agent &&
+    typeof agent === 'object' &&
+    typeof agent.addRequest !== 'function'
+  ) {
+    throw new TypeError(
+      '.agent() expects an http(s).Agent-compatible object. Did you mean to use .cert() and .key()?'
+    );
+  }
+
   if (arguments.length === 0) return this._agent;
   this._agent = agent;
   return this;
@@ -497,8 +554,7 @@ Request.prototype._pipeContinue = function (stream, options) {
     if (this._aborted) return;
 
     if (this._shouldDecompress(res)) {
-
-      let decompresser = chooseDecompresser(res);
+      const decompresser = chooseDecompresser(res);
 
       decompresser.on('error', (error) => {
         if (error && error.code === 'Z_BUF_ERROR') {
@@ -556,9 +612,11 @@ Request.prototype._redirect = function (res) {
   // this is required for Node v0.10+
   res.resume();
 
+  this._emitPreRedirect(res);
+
   let headers = this.req.getHeaders ? this.req.getHeaders() : this.req._headers;
 
-  const changesOrigin = new URL(url).host !== new URL(this.url).host;
+  const changesOrigin = new URL(url).origin !== new URL(this.url).origin;
 
   // implementation of 302 following defacto standard
   if (res.statusCode === 301 || res.statusCode === 302) {
@@ -588,6 +646,11 @@ Request.prototype._redirect = function (res) {
 
   // 307 preserves method
   // 308 preserves method
+  if ((res.statusCode === 307 || res.statusCode === 308) && changesOrigin) {
+    delete headers.authorization;
+    delete headers.cookie;
+  }
+
   delete headers.host;
 
   delete this.req;
@@ -747,14 +810,21 @@ Request.prototype.request = function () {
 
   // default to http://
   if (urlString.indexOf('http') !== 0) urlString = `http://${urlString}`;
-  const url = new URL(urlString);
+  const protectedUrl = preserveDotSegments(urlString);
+  const url = new URL(protectedUrl.urlString);
   let { protocol } = url;
-  let path = `${url.pathname}${url.search}`;
+  const path = protectedUrl.restorePath(`${url.pathname}${url.search}`);
 
   // support unix sockets
   if (/^https?\+unix:/.test(protocol) === true) {
     // get the protocol
     protocol = `${protocol.split('+')[0]}:`;
+
+    if (!url.hostname) {
+      throw new Error(
+        'Invalid unix socket URL: percent-encode the socket path by replacing "/" with "%2F".'
+      );
+    }
 
     // get the socket path
     options.socketPath = url.hostname.replace(/%2F/g, '/');
@@ -871,8 +941,13 @@ Request.prototype.request = function () {
     this.host = url.host;
 
     // expose events
-    req.once('drain', () => {
+    const emitDrain = () => {
       this.emit('drain');
+    };
+
+    req.on('drain', emitDrain);
+    req.once('close', () => {
+      req.removeListener('drain', emitDrain);
     });
 
     // auth
@@ -955,7 +1030,11 @@ Request.prototype.callback = function (error, res) {
   // Avoid the error which is emitted from 'socket hang up' to cause the fn undefined error on JS runtime.
   const fn = this._callback || noop;
   this.clearTimeout();
-  if (this.called) return console.warn('superagent: double callback bug');
+  if (this.called) {
+    if (this.timedout) return;
+    return console.warn('superagent: double callback bug');
+  }
+
   this.called = true;
 
   if (!error) {
@@ -1048,6 +1127,20 @@ Request.prototype._emitRedirect = function () {
   const response = new Response(this);
   response.redirects = this._redirectList;
   this.emit('redirect', response);
+};
+
+/**
+ * Emit a redirect response before the request URL is changed.
+ *
+ * @param {IncomingMessage} res
+ * @api private
+ */
+
+Request.prototype._emitPreRedirect = function (res) {
+  this.res = res;
+  const response = new Response(this);
+  response.redirects = this._redirectList;
+  this.emit('pre-redirect', response);
 };
 
 Request.prototype.end = function (fn) {
@@ -1200,16 +1293,20 @@ Request.prototype._end = function () {
             const flattenedFields = {};
             if (fields) {
               for (const key in fields) {
+                if (!Object.prototype.hasOwnProperty.call(fields, key)) continue;
                 const value = fields[key];
-                flattenedFields[key] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+                flattenedFields[key] =
+                  Array.isArray(value) && value.length === 1 ? value[0] : value;
               }
             }
 
             const flattenedFiles = {};
             if (files) {
               for (const key in files) {
+                if (!Object.prototype.hasOwnProperty.call(files, key)) continue;
                 const value = files[key];
-                flattenedFiles[key] = Array.isArray(value) && value.length === 1 ? value[0] : value;
+                flattenedFiles[key] =
+                  Array.isArray(value) && value.length === 1 ? value[0] : value;
               }
             }
 
@@ -1217,10 +1314,11 @@ Request.prototype._end = function () {
             callback(null, flattenedFields, flattenedFiles);
           });
         };
+
         buffer = true;
       } else if (isBinary(mime)) {
         parser = exports.parse.image;
-        buffer = true; // For backwards-compatibility buffering default is ad-hoc MIME-dependent
+        buffer = buffer !== false; // For backwards-compatibility buffering default is ad-hoc MIME-dependent
       } else if (exports.parse[mime]) {
         parser = exports.parse[mime];
       } else if (type === 'text') {
@@ -1308,11 +1406,30 @@ Request.prototype._end = function () {
       return;
     }
 
+    const completeAbortedResponse = () => {
+      if (!this._aborted) {
+        return false;
+      }
+
+      parserHandlesEnd = false;
+      if (!this.called) {
+        this.emit('end');
+        const response = this._emitResponse();
+        response.on('error', noop);
+        this.callback(null, response);
+      }
+
+      return true;
+    };
+
     // terminating events
     res.once('error', (error) => {
+      if (completeAbortedResponse()) return;
       parserHandlesEnd = false;
       this.callback(error, null);
     });
+    res.once('aborted', completeAbortedResponse);
+    res.once('close', completeAbortedResponse);
     if (!parserHandlesEnd)
       res.once('end', () => {
         debug('end %s %s', this.method, this.url);
@@ -1403,9 +1520,11 @@ Request.prototype._end = function () {
 
 // Check whether response has a non-0-sized gzip-encoded body
 Request.prototype._shouldDecompress = (res) => {
-  return hasNonEmptyResponseContent(res) && (isGzipOrDeflateEncoding(res) || isBrotliEncoding(res));
+  return (
+    hasNonEmptyResponseContent(res) &&
+    (isGzipOrDeflateEncoding(res) || isBrotliEncoding(res))
+  );
 };
-
 
 /**
  * Overrides DNS for selected hostnames. Takes object mapping hostnames to IP addresses.

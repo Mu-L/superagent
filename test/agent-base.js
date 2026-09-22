@@ -1,4 +1,4 @@
-const assert = require('assert');
+const assert = require('node:assert');
 const getSetup = require('./support/setup');
 
 const request = require('./support/client');
@@ -49,4 +49,12 @@ describe('Agent', () => {
         assert.deepEqual({ hello: 'world' }, res.body);
       });
   });
+
+  it('should expose HEAD requests', () =>
+    request
+      .agent()
+      .head(`${base}/json`)
+      .then((res) => {
+        assert.equal(res.request.method, 'HEAD');
+      }));
 });

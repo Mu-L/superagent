@@ -1,15 +1,15 @@
 'use strict';
-const assert = require('assert');
+const assert = require('node:assert');
 const request = require('../support/client');
 const express = require('../support/express');
 
 const app = express();
 const app2 = express();
 const should = require('should');
-let http = require('http');
+let http = require('node:http');
 
 if (process.env.HTTP2_TEST) {
-  http = require('http2');
+  http = require('node:http2');
 }
 
 let base = 'http://localhost';
@@ -47,9 +47,32 @@ app.all('/test-307', (request_, res) => {
 app.all('/test-308', (request_, res) => {
   res.redirect(308, `${base2}/`);
 });
+app.all('/test-307-credentials', (request_, res) => {
+  res.redirect(307, `${base2}/credentials`);
+});
+app.all('/test-308-credentials', (request_, res) => {
+  res.redirect(308, `${base2}/credentials`);
+});
+app.all('/test-307-same-origin-credentials', (request_, res) => {
+  res.redirect(307, `${base}/credentials`);
+});
 
 app2.all('/', (request_, res) => {
   res.send(request_.method);
+});
+app2.all('/credentials', (request_, res) => {
+  res.json({
+    method: request_.method,
+    authorization: request_.headers.authorization,
+    cookie: request_.headers.cookie
+  });
+});
+app.all('/credentials', (request_, res) => {
+  res.json({
+    method: request_.method,
+    authorization: request_.headers.authorization,
+    cookie: request_.headers.cookie
+  });
 });
 
 describe('request.get', () => {
@@ -180,6 +203,30 @@ describe('request.post', () => {
         done();
       });
     });
+
+    it('should strip credentials on a cross-origin redirect', () =>
+      request
+        .post(`${base}/test-307-credentials`)
+        .set('Authorization', 'Bearer secret-token')
+        .set('Cookie', 'sid=123456')
+        .redirects(1)
+        .then((res) => {
+          res.body.should.eql({ method: 'POST' });
+        }));
+
+    it('should preserve credentials on a same-origin redirect', () =>
+      request
+        .post(`${base}/test-307-same-origin-credentials`)
+        .set('Authorization', 'Bearer secret-token')
+        .set('Cookie', 'sid=123456')
+        .redirects(1)
+        .then((res) => {
+          res.body.should.eql({
+            method: 'POST',
+            authorization: 'Bearer secret-token',
+            cookie: 'sid=123456'
+          });
+        }));
   });
   describe('on 308 redirect', () => {
     it('should follow Location with a POST request', (done) => {
@@ -194,5 +241,15 @@ describe('request.post', () => {
         done();
       });
     });
+
+    it('should strip credentials on a cross-origin redirect', () =>
+      request
+        .post(`${base}/test-308-credentials`)
+        .set('Authorization', 'Bearer secret-token')
+        .set('Cookie', 'sid=123456')
+        .redirects(1)
+        .then((res) => {
+          res.body.should.eql({ method: 'POST' });
+        }));
   });
 });

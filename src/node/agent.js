@@ -8,6 +8,11 @@ const methods = require('methods');
 const request = require('../..');
 const AgentBase = require('../agent-base');
 
+function defaultCookiePath(pathname) {
+  const lastSlash = pathname.lastIndexOf('/');
+  return lastSlash > 0 ? pathname.slice(0, lastSlash) : '/';
+}
+
 /**
  * Initialize a new `Agent`.
  *
@@ -15,7 +20,7 @@ const AgentBase = require('../agent-base');
  */
 
 class Agent extends AgentBase {
-  constructor (options) {
+  constructor(options) {
     super();
 
     this.jar = new CookieJar();
@@ -50,11 +55,11 @@ class Agent extends AgentBase {
    * @param {Response} res
    * @api private
    */
-  _saveCookies (res) {
+  _saveCookies(res) {
     const cookies = res.headers['set-cookie'];
     if (cookies) {
-      const url = new URL(res.request?.url || '');
-      this.jar.setCookies(cookies, url.hostname, url.pathname);
+      const url = new URL((res.request && res.request.url) || '');
+      this.jar.setCookies(cookies, url.hostname, defaultCookiePath(url.pathname));
     }
   }
 
@@ -64,7 +69,7 @@ class Agent extends AgentBase {
    * @param {Request} req
    * @api private
    */
-  _attachCookies (request_) {
+  _attachCookies(request_) {
     const url = new URL(request_.url);
     const access = new CookieAccessInfo(
       url.hostname,
@@ -78,12 +83,12 @@ class Agent extends AgentBase {
 
 for (const name of methods) {
   const method = name.toUpperCase();
-  if (method === "QUERY") continue;
+  if (method === 'QUERY') continue;
   Agent.prototype[name] = function (url, fn) {
     const request_ = new request.Request(method, url);
 
     request_.on('response', this._saveCookies.bind(this));
-    request_.on('redirect', this._saveCookies.bind(this));
+    request_.on('pre-redirect', this._saveCookies.bind(this));
     request_.on('redirect', this._attachCookies.bind(this, request_));
     this._setDefaults(request_);
     this._attachCookies(request_);
@@ -101,7 +106,8 @@ Agent.prototype.del = Agent.prototype.delete;
 // create a Proxy that can instantiate a new Agent without using `new` keyword
 // (for backward compatibility and chaining)
 const proxyAgent = new Proxy(Agent, {
-  apply (target, thisArg, argumentsList) {
+  apply(target, thisArgument, argumentsList) {
+    // eslint-disable-next-line new-cap
     return new target(...argumentsList);
   }
 });

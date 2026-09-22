@@ -1,7 +1,7 @@
 'use strict';
 
-const assert = require('assert');
-const fs = require('fs');
+const assert = require('node:assert');
+const fs = require('node:fs');
 const request = require('../support/client');
 const getSetup = require('../support/setup');
 
@@ -24,6 +24,22 @@ describe('res.body', () => {
         (res.body.length - img.length).should.equal(0);
         done();
       });
+    });
+
+    it('should honor buffer(false)', (done) => {
+      request
+        .get(`${base}/image`)
+        .buffer(false)
+        .end((error, res) => {
+          try {
+            assert.ifError(error);
+            assert.strictEqual(res.buffered, false);
+            assert.deepEqual(res.body, {});
+            done();
+          } catch (err) {
+            done(err);
+          }
+        });
     });
 
     it('should not double-callback when maxResponseSize is exceeded', (done) => {

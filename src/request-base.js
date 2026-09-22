@@ -264,7 +264,9 @@ RequestBase.prototype.then = function (resolve, reject) {
 
     this._fullfilledPromise = new Promise((resolve, reject) => {
       self.on('abort', () => {
-        if (this._maxRetries && this._maxRetries > this._retries) {
+        // Timeouts abort the current attempt before retrying; an explicit
+        // abort must still reject even when attempts remain.
+        if (this.timedout && this._maxRetries && this._maxRetries > this._retries) {
           return;
         }
 

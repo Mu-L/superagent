@@ -3,14 +3,14 @@ const request = require('../support/client');
 const express = require('../support/express');
 
 const app = express();
-const fs = require('fs');
+const fs = require('node:fs');
+let http = require('node:http');
+const zlib = require('node:zlib');
+const { pipeline, Readable } = require('node:stream');
 const bodyParser = require('body-parser');
-let http = require('http');
-const zlib = require('zlib');
-const { pipeline } = require('stream');
 
 if (process.env.HTTP2_TEST) {
-  http = require('http2');
+  http = require('node:http2');
 }
 
 app.use(bodyParser.json());
@@ -23,7 +23,9 @@ app.get('/gzip', (request_, res) => {
   res.writeHead(200, {
     'Content-Encoding': 'gzip'
   });
-  fs.createReadStream('test/node/fixtures/user.json').pipe(new zlib.createGzip()).pipe(res);
+  fs.createReadStream('test/node/fixtures/user.json')
+    .pipe(new zlib.createGzip())
+    .pipe(res);
 });
 
 app.get('/redirect', (request_, res) => {
@@ -43,6 +45,15 @@ app.post('/', (request_, res) => {
   } else {
     res.send(request_.body);
   }
+});
+
+app.post('/slow', (request_, res) => {
+  setTimeout(() => {
+    request_.resume();
+    request_.once('end', () => {
+      res.send('ok');
+    });
+  }, 100);
 });
 
 let base = 'http://localhost';
@@ -74,6 +85,31 @@ describe('request pipe', () => {
     });
 
     stream.pipe(request_);
+  });
+
+  it('should forward every drain event', (done) => {
+    const chunks = Array.from({ length: 3 }, () =>
+      Buffer.alloc(8 * 1024 * 1024, 'a')
+    );
+    const source = Readable.from(chunks);
+    const request_ = request
+      .post(`${base}/slow`)
+      .type('application/octet-stream');
+    let drainEvents = 0;
+
+    request_.on('drain', () => {
+      drainEvents++;
+    });
+    request_.on('response', (res) => {
+      try {
+        res.text.should.equal('ok');
+        drainEvents.should.be.aboveOrEqual(2);
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    source.pipe(request_);
   });
 
   it('end() stops piping', (done) => {
@@ -147,7 +183,7 @@ describe('request pipe', () => {
     // not monitored by pipeline, we need to make sure request_ does not emit 'end' until the unzip step
     // has finished writing data.  Otherwise, we'll either end up with truncated data or a 'write after end' error.
     pipeline(request_, stream, function (err) {
-      (!!err).should.be.false();
+      Boolean(err).should.be.false();
       responseCalled.should.be.true();
 
       JSON.parse(fs.readFileSync(destinationPath)).should.eql({

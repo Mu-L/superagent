@@ -13,12 +13,14 @@ request
   });
 ```
 
+
 ## 테스트 문서
 
-[**English**](/superagent/)
+[**English**](../index.md) | [**中文文档**](../zh_CN/index.md)
 
-다음의 [테스트 문서](../test.html)는 [Mocha](https://mochajs.org/)의 "doc" 리포터를 사용해 생성되었으며, 실제 테스트 스위트를 직접 반영합니다.  
+다음의 [테스트 문서](../test.html)는 [Mocha](https://mochajs.org/)의 "doc" 리포터를 사용해 생성되었으며, 실제 테스트 스위트를 직접 반영합니다.\
 이 문서는 추가적인 참고 자료로 활용할 수 있습니다.
+
 
 ## 기본 요청
 
@@ -85,6 +87,7 @@ HTTP 메서드의 기본값은 **GET**이므로, 다음과 같이 작성해도 �
 request('/search', (err, res) => {});
 ```
 
+
 ## HTTP/2 사용하기
 
 HTTP/1.x 폴백 없이 HTTP/2 프로토콜만 사용하려면 `.http2()` 메서드를 호출하여 요청을 전송할 수 있습니다.
@@ -93,6 +96,7 @@ HTTP/1.x 폴백 없이 HTTP/2 프로토콜만 사용하려면 `.http2()` 메서�
 const request = require('superagent');
 const res = await request.get('https://example.com/h2').http2();
 ```
+
 
 ## 헤더 필드 설정하기
 
@@ -116,6 +120,7 @@ request
   .set({ 'API-Key': 'foobar', Accept: 'application/json' })
   .then(callback);
 ```
+
 
 ## `GET` 요청
 
@@ -164,6 +169,7 @@ request
   .then((res) => {});
 ```
 
+
 ## `HEAD` 요청하기
 
 HEAD 요청에서도 `.query()` 메서드를 사용할 수 있습니다. 예를 들어 다음 코드는 `/users?email=joe@smith.com` 경로를 생성합니다.
@@ -175,9 +181,10 @@ request
   .then((res) => {});
 ```
 
+
 ## `POST` / `PUT` 요청
 
-전형적인 JSON **POST** 요청은 Content-Type 헤더를 적절히 설정하고,  
+전형적인 JSON **POST** 요청은 Content-Type 헤더를 적절히 설정하고,\
 데이터를 JSON 형식으로 전송하는 방식입니다. 예를 들어 다음과 같은 코드가 이에 해당합니다.
 
 ```javascript
@@ -208,7 +215,7 @@ request
   .then(callback, errorCallback);
 ```
 
-기본적으로 문자열을 전송하면 `Content-Type`이 `application/x-www-form-urlencoded`로 자동 설정됩니다.  
+기본적으로 문자열을 전송하면 `Content-Type`이 `application/x-www-form-urlencoded`로 자동 설정됩니다.\
 여러 번 `.send()`를 호출하면 각 문자열이 `&`로 연결되어 최종적으로 `name=tj&pet=tobi`와 같은 결과가 생성됩니다.
 
 ```javascript
@@ -239,6 +246,7 @@ request
   .then(callback, errorCallback);
 ```
 
+
 ## `Content-Type` 설정하기
 
 가장 명확한 해결책은 `.set()` 메서드를 사용하는 것입니다.
@@ -247,8 +255,8 @@ request
 request.post('/user').set('Content-Type', 'application/json');
 ```
 
-간단하게 `.type()` 메서드를 사용할 수 있으며,  
-표준화된 MIME 타입(`type/subtype`)을 직접 지정하거나  
+간단하게 `.type()` 메서드를 사용할 수 있으며,\
+표준화된 MIME 타입(`type/subtype`)을 직접 지정하거나\
 "xml", "json", "png" 등과 같은 확장자 이름만으로도 설정할 수 있습니다.
 
 ```javascript
@@ -259,9 +267,10 @@ request.post('/user').type('json');
 request.post('/user').type('png');
 ```
 
+
 ## 요청 본문 직렬화하기
 
-SuperAgent는 기본적으로 JSON과 폼 데이터를 자동으로 직렬화합니다.  
+SuperAgent는 기본적으로 JSON과 폼 데이터를 자동으로 직렬화합니다.\
 또한 다른 콘텐츠 유형에 대해서도 자동 직렬화를 설정할 수 있습니다.
 
 ```js
@@ -273,7 +282,7 @@ request.serialize['application/xml'] = function (obj) {
 // 자동으로 직렬화 됩니다.
 ```
 
-사용자 정의 형식으로 페이로드를 전송하려면,  
+사용자 정의 형식으로 페이로드를 전송하려면,\
 요청 단위로 `.serialize()` 메서드를 사용해 SuperAgent의 기본 직렬화 방식을 교체할 수 있습니다.
 
 ```js
@@ -284,6 +293,7 @@ request
     return 'string generated from obj';
   });
 ```
+
 
 ## 요청 재시도하기
 
@@ -306,27 +316,28 @@ request
 
 기본적으로 다음과 같은 상태 코드는 자동으로 재시도됩니다.
 
-- `408`
-- `413`
-- `429`
-- `500`
-- `502`
-- `503`
-- `504`
-- `521`
-- `522`
-- `524`
+* `408`
+* `413`
+* `429`
+* `500`
+* `502`
+* `503`
+* `504`
+* `521`
+* `522`
+* `524`
 
 기본적으로 다음과 같은 오류 코드가 자동으로 재시도됩니다.
 
-- `'ETIMEDOUT'`
-- `'ECONNRESET'`
-- `'EADDRINUSE'`
-- `'ECONNREFUSED'`
-- `'EPIPE'`
-- `'ENOTFOUND'`
-- `'ENETUNREACH'`
-- `'EAI_AGAIN'`
+* `'ETIMEDOUT'`
+* `'ECONNRESET'`
+* `'EADDRINUSE'`
+* `'ECONNREFUSED'`
+* `'EPIPE'`
+* `'ENOTFOUND'`
+* `'ENETUNREACH'`
+* `'EAI_AGAIN'`
+
 
 ## Accept 설정하기
 
@@ -343,6 +354,7 @@ request.post('/user').accept('png');
 ### Facebook과 Accept JSON
 
 Facebook API를 호출할 때는 반드시 요청 헤더에 `Accept: application/json`을 포함해야 합니다. 그렇지 않으면 Facebook은 `Content-Type: text/javascript; charset=UTF-8`으로 응답하게 되며, SuperAgent는 이 형식을 파싱하지 못해 `res.body`가 `undefined`가 됩니다. `req.accept('json')` 또는 `req.set('Accept', 'application/json')`을 사용할 수 있습니다. 자세한 사항은 [issue 1078](https://github.com/ladjs/superagent/issues/1078)에서 확인해보세요.
+
 
 ## 쿼리 문자열
 
@@ -377,15 +389,16 @@ request
   .then(callback);
 ```
 
+
 ## TLS 옵션
 
 Node.js에서 SuperAgent는 HTTPS 요청을 구성할 수 있는 다양한 메서드를 지원합니다.
 
-- `.ca()`: 신뢰할 CA 인증서를 설정합니다.
-- `.cert()`: 클라이언트 인증서 체인을 설정합니다.
-- `.key()`: 클라이언트의 개인 키를 설정합니다.
-- `.pfx()`: PKCS12 형식의 PFX 파일을 사용하여 클라이언트의 개인 키와 인증서 체인을 설정합니다.
-- `.disableTLSCerts()`: 만료되었거나 유효하지 않은 TLS 인증서를 거부하지 않도록 설정합니다. 내부적으로 `rejectUnauthorized=true`가 설정되며, 중간자 공격(MITM)에 노출될 수 있으므로 주의가 필요합니다.
+* `.ca()`: 신뢰할 CA 인증서를 설정합니다.
+* `.cert()`: 클라이언트 인증서 체인을 설정합니다.
+* `.key()`: 클라이언트의 개인 키를 설정합니다.
+* `.pfx()`: PKCS12 형식의 PFX 파일을 사용하여 클라이언트의 개인 키와 인증서 체인을 설정합니다.
+* `.disableTLSCerts()`: 만료되었거나 유효하지 않은 TLS 인증서를 거부하지 않도록 설정합니다. 내부적으로 `rejectUnauthorized=true`가 설정되며, 중간자 공격(MITM)에 노출될 수 있으므로 주의가 필요합니다.
 
 더 자세한 내용은 Node.js [https.request 문서](https://nodejs.org/api/https.html#https_https_request_options_callback)에서 확인할 수 있습니다.
 
@@ -405,7 +418,9 @@ request
   .then((res) => {});
 ```
 
+
 ## Parsing response bodies
+
 
 ## 응답 본문 파싱하기
 
@@ -414,7 +429,7 @@ currently supporting `application/x-www-form-urlencoded`,
 `application/json`, and `multipart/form-data`. You can setup
 automatic parsing for other response-body data as well:
 
-SuperAgent는 응답 본문 데이터를 자동으로 파싱해줍니다.  
+SuperAgent는 응답 본문 데이터를 자동으로 파싱해줍니다.\
 현재 `application/x-www-form-urlencoded`, `application/json`, `multipart/form-data`을 지원합니다. 이외의 응답 본문 데이터에 대해서도 자동 파싱을 설정할 수 있습니다.
 
 ```js
@@ -438,26 +453,28 @@ request.parse['application/xml'] = function (res, cb) {
 
 ### JSON / Urlencoded
 
-`res.body` 속성은 파싱된 객체를 나타냅니다. 예를 들어, 응답이 JSON 문자열 `{"user":{"name":"tobi"}}`를 반환했다면, `res.body.user.name`은 "tobi" 값을 갖게 됩니다. 마찬가지로 x-www-form-urlencoded 형식의 "user[name]=tobi"도 동일한 결과를 제공합니다. 단, 중첩은 한 단계까지만 지원되므로 더 복잡한 구조의 데이터를 다루려면 JSON 형식을 사용하는 것이 좋습니다.
+`res.body` 속성은 파싱된 객체를 나타냅니다. 예를 들어, 응답이 JSON 문자열 `{"user":{"name":"tobi"}}`를 반환했다면, `res.body.user.name`은 "tobi" 값을 갖게 됩니다. 마찬가지로 x-www-form-urlencoded 형식의 "user\[name]=tobi"도 동일한 결과를 제공합니다. 단, 중첩은 한 단계까지만 지원되므로 더 복잡한 구조의 데이터를 다루려면 JSON 형식을 사용하는 것이 좋습니다.
 
 배열은 key를 반복해서 전달하는 방식으로 전송됩니다. 예를 들어, `.send({ color: ['red', 'blue'] })`는 `color=red&color=blue`로 변환되어 전송됩니다. 배열의 key에 `[]`를 포함시키고 싶다면 SuperAgent는 이를 자동으로 처리하지 않으므로, 직접 `color[]`와 같이 key 이름에 대괄호를 추가해야 합니다.
 
 ### 다중 파트
 
-Node 클라이언트는 [Formidable](https://github.com/felixge/node-formidable) 모듈을 통해 *multipart/form-data*를 지원합니다.  
+Node 클라이언트는 [Formidable](https://github.com/felixge/node-formidable) 모듈을 통해 *multipart/form-data*를 지원합니다.\
 다중 파트 응답을 파싱할 때 `res.files` 객체를 사용할 수 있으며, 이 객체에는 업로드된 파일에 대한 정보가 포함됩니다. 예를 들어, 다음과 같은 multipart 본문을 포함한 응답을 가정해볼 수 있습니다.
 
-    --whoop
-    Content-Disposition: attachment; name="image"; filename="tobi.png"
-    Content-Type: image/png
+```
+--whoop
+Content-Disposition: attachment; name="image"; filename="tobi.png"
+Content-Type: image/png
 
-    ... data here ...
-    --whoop
-    Content-Disposition: form-data; name="name"
-    Content-Type: text/plain
+... data here ...
+--whoop
+Content-Disposition: form-data; name="name"
+Content-Type: text/plain
 
-    Tobi
-    --whoop--
+Tobi
+--whoop--
+```
 
 `res.body.name`은 "Tobi" 값을 가지고 있으며, `res.files.image`는 디스크 경로, 파일 이름 및 기타 속성을 포함한 `File` 객체입니다.
 
@@ -465,8 +482,8 @@ Node 클라이언트는 [Formidable](https://github.com/felixge/node-formidable)
 
 브라우저에서는 바이너리 응답 본문을 처리하기 위해 `.responseType('blob')`을 사용할 수 있습니다. 이 API는 Node.js 환경에서는 필요하지 않습니다. 이 메서드에서 지원되는 인자 값은 다음과 같습니다.
 
-- `'blob'`는 XMLHttpRequest의 `responseType` 속성에 그대로 전달됩니다.
-- `'arraybuffer'`도 마찬가지로 `responseType` 속성에 전달됩니다.
+* `'blob'`는 XMLHttpRequest의 `responseType` 속성에 그대로 전달됩니다.
+* `'arraybuffer'`도 마찬가지로 `responseType` 속성에 전달됩니다.
 
 ```js
 req
@@ -479,13 +496,14 @@ req
 
 더 자세한 내용은 Mozilla Developer Network의 [XMLHttpRequest.responseType 문서](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/responseType)에서 확인할 수 있습니다.
 
+
 ## 응답 속성
 
 `Response` 객체에는 응답 텍스트, 파싱된 응답 본문, 헤더 필드, 상태 플래그 등 다양한 유용한 플래그와 속성이 설정되어 있습니다.
 
 ### 응답 문자
 
-`res.text` 속성에는 파싱되지 않은 응답 본문 문자열이 포함됩니다. 이 속성은 클라이언트 API에서는 항상 존재하며, Node 환경에서는 MIME 타입이 "text/_", "_/json", "x-www-form-urlencoded"와 일치할 경우에만 기본적으로 제공됩니다. 이러한 제한은 대용량 multipart 파일이나 이미지 등의 본문을 텍스트로 버퍼링하는 것이 매우 비효율적이기 때문에 메모리를 절약하기 위한 목적입니다. 응답을 강제로 버퍼링하려면 "응답 버퍼링" 섹션을 참조하세요.
+`res.text` 속성에는 파싱되지 않은 응답 본문 문자열이 포함됩니다. 이 속성은 클라이언트 API에서는 항상 존재하며, Node 환경에서는 MIME 타입이 "text/*", "*/json", "x-www-form-urlencoded"와 일치할 경우에만 기본적으로 제공됩니다. 이러한 제한은 대용량 multipart 파일이나 이미지 등의 본문을 텍스트로 버퍼링하는 것이 매우 비효율적이기 때문에 메모리를 절약하기 위한 목적입니다. 응답을 강제로 버퍼링하려면 "응답 버퍼링" 섹션을 참조하세요.
 
 ### 응답 본문
 
@@ -493,7 +511,7 @@ SuperAgent는 요청 데이터를 자동으로 직렬화할 뿐만 아니라, �
 
 ### 응답 헤더 필드
 
-`res.header`는 파싱된 응답 헤더 필드를 담은 객체로, Node.js와 마찬가지로 필드 이름을 소문자로 변환하여 저장합니다.  
+`res.header`는 파싱된 응답 헤더 필드를 담은 객체로, Node.js와 마찬가지로 필드 이름을 소문자로 변환하여 저장합니다.\
 예를 들어, `res.header['content-length']`와 같이 접근할 수 있습니다.
 
 ### 응답 콘텐츠 타입
@@ -528,17 +546,19 @@ res.notFound = 404 == status;
 res.forbidden = 403 == status;
 ```
 
+
 ## 요청 중단하기
 
 요청을 중단하려면 `req.abort()` 메서드를 호출하기만 하면 됩니다.
+
 
 ## 타임아웃
 
 때때로 네트워크나 서버가 요청을 수신한 후 응답 없이 멈춰버리는 경우가 있습니다. 이러한 무한 대기를 방지하려면 타임아웃을 설정해야 합니다.
 
-- `req.timeout({deadline: ms})` 또는 `req.timeout(ms)`는 업로드, 리다이렉트, 서버 처리 시간을 포함한 전체 요청이 완료되어야 하는 최종 시간 제한을 설정합니다. `ms`는 0보다 큰 밀리초 단위의 숫자이며, 제한 시간 내에 응답이 완료되지 않으면 요청은 중단됩니다.
+* `req.timeout({deadline: ms})` 또는 `req.timeout(ms)`는 업로드, 리다이렉트, 서버 처리 시간을 포함한 전체 요청이 완료되어야 하는 최종 시간 제한을 설정합니다. `ms`는 0보다 큰 밀리초 단위의 숫자이며, 제한 시간 내에 응답이 완료되지 않으면 요청은 중단됩니다.
 
-- `req.timeout({response: ms})`는 서버로부터 첫 번째 바이트가 도착할 때까지의 최대 대기 시간을 설정합니다. 전체 다운로드 소요 시간은 제한하지 않습니다. 응답 타임아웃은 DNS 조회, TCP/IP 및 TLS 연결, 요청 데이터 업로드 시간을 포함하므로, 서버의 실제 응답 시간보다 몇 초 더 길게 설정하는 것이 좋습니다.
+* `req.timeout({response: ms})`는 서버로부터 첫 번째 바이트가 도착할 때까지의 최대 대기 시간을 설정합니다. 전체 다운로드 소요 시간은 제한하지 않습니다. 응답 타임아웃은 DNS 조회, TCP/IP 및 TLS 연결, 요청 데이터 업로드 시간을 포함하므로, 서버의 실제 응답 시간보다 몇 초 더 길게 설정하는 것이 좋습니다.
 
 `deadline`과 `response` 타임아웃은 함께 사용하는 것이 좋습니다. 짧은 응답 타임아웃은 응답하지 않는 네트워크를 빠르게 감지하는 데 유용하고, 긴 데드라인은 느리지만 안정적인 네트워크 환경에서 다운로드를 완료할 수 있도록 여유 시간을 제공합니다. 두 타이머 모두 첨부된 파일 업로드에 허용되는 시간을 제한합니다. 파일을 업로드하는 경우에는 충분히 긴 타임아웃을 설정하는 것이 좋습니다.
 
@@ -565,6 +585,7 @@ request
 
 타임아웃 오류에는 `.timeout` 속성이 포함되어 있습니다.
 
+
 ## 인증
 
 Node와 브라우저 환경에서 `.auth()` 메서드를 사용하여 인증을 수행할 수 있습니다.
@@ -573,7 +594,7 @@ Node와 브라우저 환경에서 `.auth()` 메서드를 사용하여 인증을 
 request.get('http://local').auth('tobi', 'learnboost').then(callback);
 ```
 
-_Node_ 클라이언트에서는 기본 인증을 URL 내에 "user:pass" 형식으로 포함시킬 수 있습니다.
+*Node* 클라이언트에서는 기본 인증을 URL 내에 "user:pass" 형식으로 포함시킬 수 있습니다.
 
 ```javascript
 request.get('http://tobi:learnboost@local').then(callback);
@@ -591,6 +612,7 @@ request.auth('digest', 'secret', { type: 'auto' });
 request.auth('my_token', { type: 'bearer' });
 ```
 
+
 ## 다음 리다이렉션 따라가기
 
 기본적으로 최대 5번까지 리다이렉션이 자동으로 따라가며, 필요에 따라 `res.redirects(n)` 메서드를 사용하여 이 횟수를 지정할 수 있습니다.
@@ -600,6 +622,7 @@ const response = await request.get('/some.png').redirects(2);
 ```
 
 리다이렉션 횟수가 제한을 초과하면 오류로 간주됩니다. 이를 성공적인 응답으로 처리하려면 `.ok(res => res.status < 400)` 메서드를 사용하세요.
+
 
 ## 전역 상태를 위한 에이전트
 
@@ -628,6 +651,7 @@ await agent.get('/also-with-plugin-and-auth');
 ```
 
 에이전트가 기본 옵션을 설정할 수 있도록 지원하는 메서드 목록입니다. `use`, `on`, `once`, `set`, `query`, `type`, `accept`, `auth`, `withCredentials`, `sortQuery`, `retry`, `ok`, `redirects`, `timeout`, `buffer`, `serialize`, `parse`, `ca`, `key`, `pfx`, `cert`.
+
 
 ## 데이터 전달 방식
 
@@ -673,6 +697,7 @@ const req = request
 
 SuperAgent의 [향후 버전](https://github.com/ladjs/superagent/issues/1188)에서는 `pipe()`를 부적절하게 호출하면 실패하게 됩니다.
 
+
 ## 다중 부분 요청
 
 `.attach()`와 `.field()` 메서드를 제공하는 SuperAgent는 다중 부분 요청을 구성하는 데에도 매우 유용합니다.
@@ -683,9 +708,9 @@ SuperAgent의 [향후 버전](https://github.com/ladjs/superagent/issues/1188)�
 
 `.attach(name, [file], [options])`를 사용하여 파일을 전송할 수 있습니다. 여러 파일을 첨부하려면 `.attach`를 반복 호출하면 됩니다. 인자는 다음과 같습니다.
 
-- `name` — 폼 이름 필드
-- `file` — 파일 경로의 문자열 또는 `Blob`/`Buffer` 객체.
-- `options` — (선택) 사용자 정의 파일 이름의 문자열 또는 `{filename: string}` 형식의 객체. Node 환경에서는 `{contentType: 'mime/type'}`도 지원하며 브라우저에서는 적절한 타입의 `Blob` 객체를 생성해야 합니다.
+* `name` — 폼 이름 필드
+* `file` — 파일 경로의 문자열 또는 `Blob`/`Buffer` 객체.
+* `options` — (선택) 사용자 정의 파일 이름의 문자열 또는 `{filename: string}` 형식의 객체. Node 환경에서는 `{contentType: 'mime/type'}`도 지원하며 브라우저에서는 적절한 타입의 `Blob` 객체를 생성해야 합니다.
 
 <br>
 
@@ -712,9 +737,11 @@ request
   .then(callback);
 ```
 
+
 ## 압축
 
 node 클라이언트는 압축된 응답을 지원하며, 아무 것도 하지 않아도 됩니다! 그냥 작동합니다.
+
 
 ## 응답 버퍼링
 
@@ -724,11 +751,12 @@ To force buffering of response bodies as `res.text` you may invoke `req.buffer()
 
 `res.buffered` 플래그가 제공되면, 이를 활용하여 동일한 콜백 함수에서 버퍼링된 응답과 버퍼링되지 않은 응답을 모두 처리할 수 있습니다.
 
+
 ## CORS
 
 보안상의 이유로 브라우저는 서버가 CORS 헤더를 통해 명시적으로 허용하지 않으면 교차 출처 요청(cross-origin requests)을 차단합니다. 브라우저는 또한 서버가 어떤 HTTP 헤더와 메서드를 허용하는지 확인하기 위해 추가적인 **OPTIONS** 요청을 전송합니다. [CORS에 대해 더 알아보기](https://developer.mozilla.org/ko/docs/Web/HTTP/Guides/CORS).
 
-`.withCredentials()` 메서드는 origin(출처)에서 쿠키를 전송할 수 있도록 활성화합니다. 단, 이 기능은 `Access-Control-Allow-Origin` 값이 와일드카드("\*")가 _아니어야_ 하며, `Access-Control-Allow-Credentials` 값이 `"true"`일 경우에만 작동합니다.
+`.withCredentials()` 메서드는 origin(출처)에서 쿠키를 전송할 수 있도록 활성화합니다. 단, 이 기능은 `Access-Control-Allow-Origin` 값이 와일드카드("\*")가 *아니어야* 하며, `Access-Control-Allow-Credentials` 값이 `"true"`일 경우에만 작동합니다.
 
 ```javascript
 request
@@ -739,6 +767,7 @@ request
     assert.equal('tobi', res.text);
   });
 ```
+
 
 ## 오류 처리하기
 
@@ -786,6 +815,7 @@ request
   });
 ```
 
+
 ## 진행과정 추적하기
 
 SuperAgent는 업로드와 큰 파일 다운로드에서 `progress` 이벤트를 동작시킵니다.
@@ -805,6 +835,7 @@ request
   })
   .then();
 ```
+
 
 ## 로컬 호스트에서 테스트하기
 
@@ -843,6 +874,7 @@ const res = await request.get('https://localhost').trustLocalhost();
 
 다른 IP 주소로 요청을 보낼 때 HTTPS 보안을 비활성화하는 기능은 의도적으로 지원하지 않습니다. 이러한 옵션은 HTTPS 문제를 빠르게 "해결"하려는 방식으로 오용되는 경우가 많기 때문입니다. [Let's Encrypt](https://certbot.eff.org)를 통해 무료 HTTPS 인증서를 발급받거나, `.ca(ca_public_pem)`을 사용해 자체 서명된 인증서를 신뢰할 수 있도록 직접 CA를 설정할 수 있습니다.
 
+
 ## Promise 및 Generator 지원
 
 SuperAgent의 요청은 "thenable" 객체이며, JavaScript의 Promise 및 `async`/`await` 문법과 호환됩니다.
@@ -869,6 +901,7 @@ v8 버전부터는 IE에 대한 지원이 중단되었습니다. Opera 85나 iOS
 ```html
 <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=WeakRef,BigInt"></script>
 ```
+
 
 ## 브라우저와 node 버전
 

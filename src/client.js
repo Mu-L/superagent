@@ -192,10 +192,12 @@ request.types = {
  */
 
 request.serialize = {
-  'application/x-www-form-urlencoded': (obj) => {
-    return qs.stringify(obj, { indices: false, strictNullHandling: true });
+  'application/x-www-form-urlencoded'(object) {
+    return qs.stringify(object, { indices: false, strictNullHandling: true });
   },
-  'application/json': safeStringify
+  'application/json': safeStringify,
+  // CSP reports carry JSON bodies but use a distinct registered media type.
+  'application/csp-report': safeStringify
 };
 
 /**
@@ -333,11 +335,10 @@ function Response(request_) {
 
   if (this.text === null && request_._responseType) {
     this.body = this.xhr.response;
+  } else if (this.req.method === 'HEAD') {
+    this.body = null;
   } else {
-    this.body =
-      this.req.method === 'HEAD'
-        ? null
-        : this._parseBody(this.text ? this.text : this.xhr.response);
+    this.body = this._parseBody(this.text || this.xhr.response);
   }
 }
 
@@ -429,7 +430,7 @@ function Request(method, url) {
             ? self.xhr.responseText
             : self.xhr.response;
         // issue #876: return the http status code if the response parsing fails
-        error.status = self.xhr.status ? self.xhr.status : null;
+        error.status = self.xhr.status || null;
         error.statusCode = error.status; // backwards-compat only
       } else {
         error.rawResponse = null;
@@ -549,15 +550,16 @@ Request.prototype.auth = function (user, pass, options) {
     };
   }
 
-  const encoder = options.encoder
-    ? options.encoder
-    : (string) => {
-        if (typeof btoa === 'function') {
-          return btoa(string);
-        }
+  let { encoder } = options;
+  if (!encoder) {
+    encoder = (string) => {
+      if (typeof btoa === 'function') {
+        return btoa(string);
+      }
 
-        throw new Error('Cannot use basic auth, btoa is not a function');
-      };
+      throw new Error('Cannot use basic auth, btoa is not a function');
+    };
+  }
 
   return this._auth(user, pass, options, encoder);
 };
@@ -874,7 +876,7 @@ Request.prototype._end = function () {
   } catch (err) {
     try {
       xhr.abort();
-    } catch {
+    } catch (err) {
       // ignore
     }
 
@@ -886,12 +888,21 @@ Request.prototype._end = function () {
 // (for backward compatibility and chaining)
 const proxyAgent = new Proxy(Agent, {
   apply(target, thisArg, argumentsList) {
+    // eslint-disable-next-line new-cap
     return new target(...argumentsList);
   }
 });
 request.agent = proxyAgent;
 
-for (const method of ['GET', 'POST', 'OPTIONS', 'PATCH', 'PUT', 'DELETE']) {
+for (const method of [
+  'GET',
+  'HEAD',
+  'POST',
+  'OPTIONS',
+  'PATCH',
+  'PUT',
+  'DELETE'
+]) {
   Agent.prototype[method.toLowerCase()] = function (url, fn) {
     const request_ = new request.Request(method, url);
     this._setDefaults(request_);

@@ -1,4 +1,3 @@
-
 /**
  * Return the mime type for the given `str`.
  *
@@ -43,8 +42,14 @@ exports.parseLinks = (value) => {
   for (const string_ of value.split(/ *, */)) {
     const parts = string_.split(/ *; */);
     const url = parts[0].slice(1, -1);
-    const rel = parts[1].split(/ *= */)[1].slice(1, -1);
-    object[rel] = url;
+    for (const part of parts.slice(1)) {
+      const [key, keyValue] = part.split(/ *= */, 2);
+      if (key && key.toLowerCase() === 'rel' && keyValue) {
+        const relationship = keyValue.replace(/^"|"$/g, '');
+        if (relationship) object[relationship] = url;
+        break;
+      }
+    }
   }
 
   return object;
@@ -73,7 +78,7 @@ exports.cleanHeader = (header, changesOrigin) => {
 };
 
 exports.normalizeHostname = (hostname) => {
-  const [,normalized] = hostname.match(/^\[([^\]]+)\]$/) || [];
+  const [, normalized] = hostname.match(/^\[([^\]]+)]$/) || [];
   return normalized || hostname;
 };
 
@@ -97,11 +102,11 @@ exports.isObject = (object) => {
 exports.hasOwn =
   Object.hasOwn ||
   function (object, property) {
-    if (object == null) {
+    if (object === null || object === undefined) {
       throw new TypeError('Cannot convert undefined or null to object');
     }
 
-    return Object.prototype.hasOwnProperty.call(new Object(object), property);
+    return Object.prototype.hasOwnProperty.call(Object(object), property);
   };
 
 exports.mixin = (target, source) => {
@@ -119,7 +124,7 @@ exports.mixin = (target, source) => {
  */
 
 exports.isGzipOrDeflateEncoding = (res) => {
-  return new RegExp(/^\s*(?:deflate|gzip)\s*$/).test(res.headers['content-encoding']);
+  return /^\s*(?:deflate|gzip)\s*$/.test(res.headers['content-encoding']);
 };
 
 /**
@@ -129,5 +134,5 @@ exports.isGzipOrDeflateEncoding = (res) => {
  */
 
 exports.isBrotliEncoding = (res) => {
-  return new RegExp(/^\s*(?:br)\s*$/).test(res.headers['content-encoding']);
+  return /^\s*br\s*$/.test(res.headers['content-encoding']);
 };

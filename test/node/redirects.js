@@ -1,6 +1,6 @@
 'use strict';
 
-const assert = require('assert');
+const assert = require('node:assert');
 const getSetup = require('../support/setup');
 const request = require('../support/client');
 
@@ -87,7 +87,29 @@ describe('request', () => {
             }
           });
       });
-    })
+    });
+
+    it('should retain a redirect cookie for its source host only', () => {
+      const agent = request.agent();
+      const source = new URL(base);
+      source.hostname = 'source.local';
+      const destination = new URL(base);
+      destination.hostname = 'destination.local';
+
+      return agent
+        .get(`${source.origin}/cross-host-cookie-redirect`)
+        .query({ destination: `${destination.origin}/show-cookies` })
+        .connect('127.0.0.1')
+        .then((res) => {
+          assert(!/origin=true/.test(res.text));
+          return agent
+            .get(`${source.origin}/show-cookies`)
+            .connect('127.0.0.1');
+        })
+        .then((res) => {
+          assert(/origin=true/.test(res.text));
+        });
+    });
 
     it('should follow Location', (done) => {
       const redirects = [];

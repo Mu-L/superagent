@@ -21,7 +21,7 @@
        });
 </code></pre>
 <h2 id="test-documentation">Test documentation</h2>
-<p><a href="docs/zh_CN/index.html"><strong>中文文档</strong></a></p>
+<p><a href="./zh_CN/index.md"><strong>中文文档</strong></a> | <a href="./ko_KR/index.md"><strong>한국어</strong></a></p>
 <p>The following <a href="docs/test.html">test documentation</a> was generated with <a href="https://mochajs.org/">Mocha&#39;s</a> &quot;doc&quot; reporter, and directly reflects the test suite. This provides an additional source of documentation.</p>
 <h2 id="request-basics">Request basics</h2>
 <p>A request can be initiated by invoking the appropriate method on the <code>request</code> object, then calling <code>.then()</code> (or <code>.end()</code> <a href="#promise-and-generator-support">or <code>await</code></a>) to send the request. For example a simple <strong>GET</strong> request:</p>
@@ -73,7 +73,7 @@
 
      });
 </code></pre>
-<h2 id="using-http/2">Using HTTP/2</h2>
+<h2 id="using-http2">Using HTTP/2</h2>
 <p>To make a request using HTTP/2 protocol only (with no HTTP/1.x fallback), use the <code>.http2()</code> method.</p>
 <pre><code class="language-javascript">    const request = require(&#39;superagent&#39;);
     const res = await request
@@ -444,6 +444,15 @@ Tobi
 </code></pre>
 <p>Redirects exceeding the limit are treated as errors. Use <code>.ok(res =&gt; res.status &lt; 400)</code> to read them as successful responses.</p>
 <h2 id="agents-for-global-state">Agents for global state</h2>
+<h3 id="custom-nodejs-http-agents">Custom Node.js HTTP agents</h3>
+<p>For a Node.js request that needs a custom <a href="https://nodejs.org/api/http.html#class-httpagent"><code>http.Agent</code></a>, such as a keep-alive agent, pass it to the request with <code>.agent()</code>. This is distinct from <code>request.agent()</code>, which creates a SuperAgent cookie jar and default-request settings.</p>
+<pre><code class="language-javascript">const http = require(&#39;http&#39;);
+const keepAliveAgent = new http.Agent({ keepAlive: true });
+
+request.get(&#39;https://example.com&#39;).agent(keepAliveAgent).then((res) =&gt; {
+  // handle response
+});
+</code></pre>
 <h3 id="saving-cookies">Saving cookies</h3>
 <p>In Node SuperAgent does not save cookies by default, but you can use the <code>.agent()</code> method to create a copy of SuperAgent that saves cookies. Each copy has a separate cookie jar.</p>
 <pre><code class="language-javascript">    const agent = request.agent();

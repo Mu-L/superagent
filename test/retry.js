@@ -233,6 +233,22 @@ describe('.retry(count)', function () {
     }, 150);
   });
 
+  it('should reject an explicitly aborted promise before retries are exhausted', async () => {
+    const request_ = request.get(`${base}/delay/400`).retry(2);
+    const result = request_.then(
+      () => assert.fail('expected an aborted request to reject'),
+      (error) => {
+        assert.equal(error.code, 'ABORTED');
+      }
+    );
+
+    setTimeout(() => {
+      request_.abort();
+    }, 50);
+
+    await result;
+  });
+
   it('should correctly retain header fields', (done) => {
     request
       .get(`${base}/error/ok/${uniqid()}`)

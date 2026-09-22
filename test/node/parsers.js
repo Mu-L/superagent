@@ -76,13 +76,16 @@ describe('req.parse(fn)', () => {
   if (doesntWorkInHttp2)
     it('should not emit error on aborted chunked json', (done) => {
       const request_ = request.get(`${base}/chunked-json`);
+      request_.on('request', (req) => {
+        req.once('response', () => {
+          setTimeout(() => {
+            request_.abort();
+          }, 50);
+        });
+      });
       request_.end((error) => {
         assert.ifError(error);
         done();
       });
-
-      setTimeout(() => {
-        request_.abort();
-      }, 150);
     });
 });

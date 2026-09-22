@@ -110,7 +110,7 @@ class Request extends Stream {
 
     this._headerSent = true;
 
-    frame.once('drain', () => this.emit('drain'));
+    frame.on('drain', () => this.emit('drain'));
     frame.on('error', (error) => this.emit('error', error));
     frame.on('close', () => this.session.close());
 
@@ -195,7 +195,7 @@ class Request extends Stream {
       if (this.frame) {
         this.frame.close(NGHTTP2_CANCEL);
       }
-    } catch {
+    } catch (err) {
       // ignore
     }
 
@@ -203,7 +203,7 @@ class Request extends Stream {
       if (this.session && !this.session.destroyed) {
         this.session.destroy();
       }
-    } catch {
+    } catch (err) {
       // ignore
     }
 

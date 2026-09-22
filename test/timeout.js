@@ -1,4 +1,4 @@
-const assert = require('assert');
+const assert = require('node:assert');
 const getSetup = require('./support/setup');
 
 const request = require('./support/client');
@@ -135,6 +135,21 @@ describe('.timeout(ms)', function () {
           request.get(`${base}/delay/slowbody/finish`).end();
         })
         .end(done);
+    });
+
+    it('should not warn for the expected socket error after a timeout', () => {
+      const request_ = request.get(`${base}/delay/500`);
+      const { warn } = console;
+      let warned = false;
+      console.warn = () => {
+        warned = true;
+      };
+
+      request_.called = true;
+      request_.timedout = true;
+      request_.callback(new Error('socket hang up'));
+      console.warn = warn;
+      assert.equal(warned, false);
     });
   });
 });

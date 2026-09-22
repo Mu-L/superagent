@@ -43,6 +43,17 @@ describe('request.serializeObject()', () => {
   });
 });
 
+describe('request.serialize["application/csp-report"]', () => {
+  it('should serialize CSP reports as JSON', () => {
+    assert.equal(
+      request.serialize['application/csp-report']({
+        'csp-report': { 'document-uri': 'https://example.test/' }
+      }),
+      '{"csp-report":{"document-uri":"https://example.test/"}}'
+    );
+  });
+});
+
 describe('request.parseString()', () => {
   it('should parse', () => {
     parse('name=tj', { name: 'tj' });

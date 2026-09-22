@@ -2,7 +2,7 @@ const getSetup = require('./support/setup');
 
 const doesntWorkInHttp2 = !process.env.HTTP2_TEST;
 
-const assert = require('assert');
+const assert = require('node:assert');
 const request = require('./support/client');
 
 describe('req.send(Object) as "json"', function () {
@@ -99,7 +99,7 @@ describe('req.send(Object) as "json"', function () {
           try {
             res.should.be.json();
             res.text.should.equal('{"tobi":"ferret"}');
-            ({ tobi: 'ferret' }.should.eql(res.body));
+            ({ tobi: 'ferret' }).should.eql(res.body);
             done();
           } catch (err) {
             done(err);
@@ -114,27 +114,24 @@ describe('req.send(Object) as "json"', function () {
       .send({ name: 'vendor' })
       .end((error, res) => {
         res.text.should.equal('{"name":"vendor"}');
-        ({ name: 'vendor' }.should.eql(res.body));
+        ({ name: 'vendor' }).should.eql(res.body);
         done();
       });
   });
 
   it('should error for BigInt object', (done) => {
     try {
-      request
-        .post(`${uri}/echo`)
-        .type('json')
-        .send({number: 1n})
-        throw new Error('Should have thrown error for object with BigInt')
-    } catch (error) {
-      assert.strictEqual(error.message, 'Cannot serialize BigInt value to json');
+      request.post(`${uri}/echo`).type('json').send({ number: 1n });
+      throw new Error('Should have thrown error for object with BigInt');
+    } catch (err) {
+      assert.strictEqual(err.message, 'Cannot serialize BigInt value to json');
     }
+
     done();
   });
 
   describe('when BigInts have a .toJSON property', function () {
     before(function () {
-      // eslint-disable-next-line node/no-unsupported-features/es-builtins
       BigInt.prototype.toJSON = function () {
         return this.toString();
       };
@@ -152,22 +149,18 @@ describe('req.send(Object) as "json"', function () {
     });
 
     after(function () {
-      // eslint-disable-next-line node/no-unsupported-features/es-builtins
       delete BigInt.prototype.toJSON;
     });
   });
 
-
   it('should error for BigInt primitive', (done) => {
     try {
-      request
-        .post(`${uri}/echo`)
-        .type('json')
-        .send(1n)
-        throw new Error('Should have thrown error for BigInt primitive')
-    } catch (error) {
-      assert.strictEqual(error.message, 'Cannot send value of type BigInt');
+      request.post(`${uri}/echo`).type('json').send(1n);
+      throw new Error('Should have thrown error for BigInt primitive');
+    } catch (err) {
+      assert.strictEqual(err.message, 'Cannot send value of type BigInt');
     }
+
     done();
   });
 
@@ -180,7 +173,7 @@ describe('req.send(Object) as "json"', function () {
         .end((error, res) => {
           res.should.be.json();
           res.text.should.equal('{"name":"tobi","age":1}');
-          ({ name: 'tobi', age: 1 }.should.eql(res.body));
+          ({ name: 'tobi', age: 1 }).should.eql(res.body);
           done();
         });
     });
@@ -208,6 +201,19 @@ describe('res.body', function () {
         done();
       });
     });
+
+    if (doesntWorkInBrowserYet)
+      it('should parse a body with a leading byte order mark', (done) => {
+        request.get(`${uri}/json-bom`).end((error, res) => {
+          try {
+            assert.ifError(error);
+            res.body.should.eql({ name: 'manny' });
+            done();
+          } catch (err) {
+            done(err);
+          }
+        });
+      });
   });
 
   if (doesntWorkInBrowserYet)
@@ -240,6 +246,23 @@ describe('res.body', function () {
     it('should return the http status code', (done) => {
       request.get(`${uri}/invalid-json-forbidden`).end((error, res) => {
         assert.equal(error.statusCode, 403);
+        done();
+      });
+    });
+
+    it('should return the standard http status', (done) => {
+      request.get(`${uri}/invalid-json-forbidden`).end((error, res) => {
+        assert.equal(error.status, 403);
+        done();
+      });
+    });
+
+    it('should return the response headers', (done) => {
+      request.get(`${uri}/invalid-json-forbidden`).end((error, res) => {
+        assert.equal(
+          error.headers['content-type'],
+          'application/json; charset=utf-8'
+        );
         done();
       });
     });

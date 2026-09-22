@@ -1,10 +1,10 @@
 'use strict';
-const assert = require('assert');
+const assert = require('node:assert');
 
-let http = require('http');
-let https = require('https');
-const os = require('os');
-const fs = require('fs');
+let http = require('node:http');
+let https = require('node:https');
+const os = require('node:os');
+const fs = require('node:fs');
 const express = require('../support/express');
 const request = require('../support/client');
 
@@ -19,7 +19,7 @@ let httpServer;
 let httpsServer;
 
 if (process.env.HTTP2_TEST) {
-  http = https = require('http2');
+  http = https = require('node:http2');
 }
 
 app.get('/', (request_, res) => {
@@ -69,6 +69,27 @@ describe('[unix-sockets] http', () => {
     if (typeof httpServer.close === 'function') {
       httpServer.close();
     } else httpServer.destroy();
+  });
+});
+
+describe('[unix-sockets] invalid path', () => {
+  if (process.platform === 'win32') {
+    return;
+  }
+
+  it('should reject an unencoded socket path before connecting', (done) => {
+    request
+      .get(`http+unix://${httpSockPath}/request/path`)
+      .end((error, res) => {
+        try {
+          assert(error);
+          assert.match(error.message, /percent-encode the socket path/);
+          assert.strictEqual(res, undefined);
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
   });
 });
 

@@ -38,6 +38,20 @@ describe('utils.parseLinks(str)', () => {
       'https://api.github.com/repos/visionmedia/mocha/issues?page=5'
     );
   });
+
+  it('should find rel regardless of attribute position', () => {
+    const links = utils.parseLinks(
+      '<https://example.com/page2>; type="text/html"; rel="next"'
+    );
+    links.should.eql({ next: 'https://example.com/page2' });
+  });
+
+  it('should preserve valid links when another entry has no rel', () => {
+    const links = utils.parseLinks(
+      '<https://example.com/unrelated>; type="text/html", <https://example.com/page2>; rel="next"'
+    );
+    links.should.eql({ next: 'https://example.com/page2' });
+  });
 });
 
 describe('utils.isGzipOrDeflateEncoding(res)', () => {
@@ -66,9 +80,9 @@ describe('utils.isGzipOrDeflateEncoding(res)', () => {
   it('should return true when content encoding has a lot of spaces followed with gzip', () => {
     utils.isGzipOrDeflateEncoding({
       headers: {
-        'content-encoding': " " * 10**6 + " gzip",
+        'content-encoding': `${' '.repeat(10 ** 6)}gzip`,
       },
-    }).should.equal(false);
+    }).should.equal(true);
   });
   
   it('should return true when content encoding repeates it self', () => {
@@ -90,7 +104,7 @@ describe('utils.isGzipOrDeflateEncoding(res)', () => {
   it('should return true when content encoding - nested patterns', () => {
     utils.isGzipOrDeflateEncoding({
       headers: {
-        'content-encoding': " " * 10**5 + ("gzip deflate " * 1000)
+        'content-encoding': `${' '.repeat(10 ** 5)}${'gzip deflate '.repeat(1000)}`
       },
     }).should.equal(false);
   });
@@ -117,9 +131,9 @@ describe('utils.isBrotliEncoding(res)', () => {
   it('should return true when content encoding has a lot of spaces followed with br', () => {
     utils.isBrotliEncoding({
       headers: {
-        'content-encoding': " " * 10**6 + " br",
+        'content-encoding': `${' '.repeat(10 ** 6)}br`,
       },
-    }).should.equal(false);
+    }).should.equal(true);
   });
   
   it('should return true when content encoding repeates it self', () => {
@@ -141,7 +155,7 @@ describe('utils.isBrotliEncoding(res)', () => {
   it('should return true when content encoding - nested patterns', () => {
     utils.isBrotliEncoding({
       headers: {
-        'content-encoding': " " * 10**5 + ("br " * 1000)
+        'content-encoding': `${' '.repeat(10 ** 5)}${'br '.repeat(1000)}`
       },
     }).should.equal(false);
   });

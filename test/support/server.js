@@ -108,6 +108,10 @@ app.get('/json', (request, res) => {
   res.status(200).json({ name: 'manny' });
 });
 
+app.get('/json-bom', (request, res) => {
+  res.type('json').send('\uFEFF{"name":"manny"}');
+});
+
 app.get('/json-hal', (request, res) => {
   res.set('content-type', 'application/hal+json');
   res.send({ name: 'hal 5000' });
@@ -166,6 +170,15 @@ app.get('/links', (request, res) => {
   res.header(
     'Link',
     '<https://api.github.com/repos/visionmedia/mocha/issues?page=2>; rel="next"'
+  );
+  res.end();
+});
+
+app.get('/content-type-parameter-collision', (request, res) => {
+  res.set('foo', 'a');
+  res.set(
+    'content-type',
+    'text/csv; header=present; get=present; charset=utf-8'
   );
   res.end();
 });
@@ -422,6 +435,11 @@ app.get('/cookie-redirect', (request, res) => {
   res.set('Set-Cookie', 'replaced=yes');
   res.append('Set-Cookie', 'from-redir=1', true);
   res.redirect(303, '/show-cookies');
+});
+
+app.get('/cross-host-cookie-redirect', (request, res) => {
+  res.cookie('origin', 'true', { path: '/' });
+  res.redirect(303, request.query.destination);
 });
 
 app.get('/set-cookie', (request, res) => {

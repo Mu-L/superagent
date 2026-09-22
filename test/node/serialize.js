@@ -25,4 +25,23 @@ describe('req.serialize(fn)', () => {
         done();
       });
   });
+
+  it('should serialize CSP reports as JSON', (done) => {
+    request
+      .post(`${base}/echo`)
+      .type('application/csp-report')
+      .send({ 'csp-report': { 'document-uri': 'https://example.test/' } })
+      .end((error, res) => {
+        try {
+          assert.ifError(error);
+          assert.equal(
+            res.body.toString(),
+            '{"csp-report":{"document-uri":"https://example.test/"}}'
+          );
+          done();
+        } catch (err) {
+          done(err);
+        }
+      });
+  });
 });
