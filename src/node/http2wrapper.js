@@ -189,6 +189,26 @@ class Request extends Stream {
     frame.close(NGHTTP2_CANCEL);
     this.session.destroy();
   }
+
+  _destroy(error, callback) {
+    try {
+      if (this.frame) {
+        this.frame.close(NGHTTP2_CANCEL);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      if (this.session && !this.session.destroyed) {
+        this.session.destroy();
+      }
+    } catch {
+      // ignore
+    }
+
+    callback(error);
+  }
 }
 
 exports.setProtocol = setProtocol;

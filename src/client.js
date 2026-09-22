@@ -853,23 +853,33 @@ Request.prototype._end = function () {
   }
 
   // set header fields
-  for (const field in this.header) {
-    if (this.header[field] === null) continue;
+  try {
+    for (const field in this.header) {
+      if (this.header[field] === null) continue;
 
-    if (hasOwn(this.header, field))
-      xhr.setRequestHeader(field, this.header[field]);
+      if (hasOwn(this.header, field))
+        xhr.setRequestHeader(field, this.header[field]);
+    }
+
+    if (this._responseType) {
+      xhr.responseType = this._responseType;
+    }
+
+    // send stuff
+    this.emit('request', this);
+
+    // IE11 xhr.send(undefined) sends 'undefined' string as POST payload (instead of nothing)
+    // We need null here if data is undefined
+    xhr.send(typeof data === 'undefined' ? null : data);
+  } catch (err) {
+    try {
+      xhr.abort();
+    } catch {
+      // ignore
+    }
+
+    return this.callback(err);
   }
-
-  if (this._responseType) {
-    xhr.responseType = this._responseType;
-  }
-
-  // send stuff
-  this.emit('request', this);
-
-  // IE11 xhr.send(undefined) sends 'undefined' string as POST payload (instead of nothing)
-  // We need null here if data is undefined
-  xhr.send(typeof data === 'undefined' ? null : data);
 };
 
 // create a Proxy that can instantiate a new Agent without using `new` keyword
