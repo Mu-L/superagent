@@ -623,6 +623,10 @@ By default up to 5 redirects will be followed, however you may specify this with
 
 Redirects exceeding the limit are treated as errors. Use `.ok(res => res.status < 400)` to read them as successful responses.
 
+Only `http:` and `https:` redirect targets are followed; a request made over a Unix domain socket may additionally be redirected within that same socket. A `Location` header pointing anywhere else (another socket, `file:`, `data:`, …) fails the request with an error whose `code` is `EUNSUPPORTEDREDIRECT`, and an unparseable `Location` header fails it with `EINVALIDREDIRECT`. In both cases `err.status` holds the redirect status and `err.location` the offending header value.
+
+When a redirect changes the origin (scheme, host or port), the `Authorization` and `Cookie` headers are dropped, including credentials given with `.auth(user, pass, { type: 'auto' })`; cookies are re-attached per host by [agents](#agents-for-global-state).
+
 
 ## Agents for global state
 
@@ -653,6 +657,8 @@ In Node SuperAgent does not save cookies by default, but you can use the `.agent
 ```
 
 In browsers cookies are managed automatically by the browser, so the `.agent()` does not isolate cookies.
+
+The Node cookie jar only stores a cookie for the host that set it, or for a `Domain` attribute that host belongs to (RFC 6265); a server cannot plant cookies for an unrelated host or for a bare public suffix such as `com`.
 
 ### Default options for multiple requests
 
@@ -765,6 +771,8 @@ The node client supports compressed responses, best of all, you don't have to do
 To force buffering of response bodies as `res.text` you may invoke `req.buffer()`. To undo the default of buffering for text responses such as "text/plain", "text/html" etc you may invoke `req.buffer(false)`.
 
 When buffered the `res.buffered` flag is provided, you may use this to handle both buffered and unbuffered responses in the same callback.
+
+Buffered bodies are limited to 200 MB of *decompressed* data by default; use `req.maxResponseSize(bytes)` to change that limit. When it is exceeded the request fails with an error whose `code` is `ETOOLARGE`, and any decompression in progress is stopped. Unbuffered responses are streamed to you without accumulating anything, so the limit does not apply to them (nor to `.pipe()`); apply your own bounds when streaming from untrusted servers.
 
 
 ## CORS

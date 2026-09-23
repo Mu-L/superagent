@@ -21,7 +21,7 @@ const Emitter = require('component-emitter');
 const safeStringify = require('fast-safe-stringify');
 const qs = require('qs');
 const RequestBase = require('./request-base');
-const { isObject, mixin, hasOwn } = require('./utils');
+const { isObject, mixin, hasOwn, isSafeKey } = require('./utils');
 const ResponseBase = require('./response-base');
 const Agent = require('./agent-base');
 
@@ -183,6 +183,20 @@ request.types = {
 };
 
 /**
+ * Map a short type name through `request.types`, falling back to the name
+ * itself. Only own entries count: a name such as "constructor" must not
+ * resolve to an inherited function.
+ *
+ * @param {String} type
+ * @return {String}
+ * @api private
+ */
+
+function lookupType(type) {
+  return (hasOwn(request.types, type) && request.types[type]) || type;
+}
+
+/**
  * Default serialization map.
  *
  *     superagent.serialize['application/xml'] = function(obj){
@@ -240,6 +254,7 @@ function parseHeader(string_) {
     }
 
     field = line.slice(0, index).toLowerCase();
+    if (!isSafeKey(field)) continue;
     value = trim(line.slice(index + 1));
     fields[field] = value;
   }
@@ -356,7 +371,11 @@ mixin(Response.prototype, ResponseBase.prototype);
  */
 
 Response.prototype._parseBody = function (string_) {
-  let parse = request.parse[this.type];
+  // `this.type` is taken from the response; an inherited key such as
+  // "constructor" must not resolve to a parser
+  let parse = hasOwn(request.parse, this.type)
+    ? request.parse[this.type]
+    : undefined;
   if (this.req._parser) {
     return this.req._parser(this, string_);
   }
@@ -497,7 +516,7 @@ mixin(Request.prototype, RequestBase.prototype);
  */
 
 Request.prototype.type = function (type) {
-  this.set('Content-Type', request.types[type] || type);
+  this.set('Content-Type', lookupType(type));
   return this;
 };
 
@@ -522,7 +541,7 @@ Request.prototype.type = function (type) {
  */
 
 Request.prototype.accept = function (type) {
-  this.set('Accept', request.types[type] || type);
+  this.set('Accept', lookupType(type));
   return this;
 };
 
@@ -844,9 +863,12 @@ Request.prototype._end = function () {
   ) {
     // serialize stuff
     const contentType = this._header['content-type'];
+    const serializeType = contentType ? contentType.split(';')[0] : '';
     let serialize =
       this._serializer ||
-      request.serialize[contentType ? contentType.split(';')[0] : ''];
+      (hasOwn(request.serialize, serializeType)
+        ? request.serialize[serializeType]
+        : undefined);
     if (!serialize && isJSON(contentType)) {
       serialize = request.serialize['application/json'];
     }

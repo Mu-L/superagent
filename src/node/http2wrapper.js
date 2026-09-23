@@ -2,6 +2,7 @@ const http2 = require('http2');
 const Stream = require('stream');
 const net = require('net');
 const tls = require('tls');
+const { isSafeKey } = require('../utils');
 
 const {
   HTTP2_HEADER_PATH,
@@ -124,6 +125,9 @@ class Request extends Stream {
     for (let key of keys) {
       let value = headers[key];
       key = key.toLowerCase();
+      // header names come from the peer; never let one such as "__proto__"
+      // reach into the prototype chain of the headers object
+      if (!isSafeKey(key)) continue;
       switch (key) {
         case HTTP2_HEADER_SET_COOKIE:
           value = Array.isArray(value) ? value : [value];

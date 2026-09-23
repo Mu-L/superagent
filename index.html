@@ -159,7 +159,7 @@
         .then(callback, errorCallback)
 </code></pre>
 <p>By default sending strings will set the <code>Content-Type</code> to <code>application/x-www-form-urlencoded</code>,
-  multiple calls will be concatenated with <code>&amp;</code>, here resulting in <code>name=tj&amp;pet=tobi</code>:</p>
+multiple calls will be concatenated with <code>&amp;</code>, here resulting in <code>name=tj&amp;pet=tobi</code>:</p>
 <pre><code class="language-javascript">      request.post(&#39;/user&#39;)
         .send(&#39;name=tj&#39;)
         .send(&#39;pet=tobi&#39;)
@@ -263,7 +263,7 @@ the built-in serialization with the <code>.serialize()</code> method on a per-re
 <h3 id="facebook-and-accept-json">Facebook and Accept JSON</h3>
 <p>If you are calling Facebook&#39;s API, be sure to send an <code>Accept: application/json</code> header in your request. If you don&#39;t do this, Facebook will respond with <code>Content-Type: text/javascript; charset=UTF-8</code>, which SuperAgent will not parse and thus <code>res.body</code> will be undefined. You can do this with either <code>req.accept(&#39;json&#39;)</code> or <code>req.set(&#39;Accept&#39;, &#39;application/json&#39;)</code>. See <a href="https://github.com/ladjs/superagent/issues/1078">issue 1078</a> for details.</p>
 <h2 id="query-strings">Query strings</h2>
-<p>  <code>req.query(obj)</code> is a method which may be used to build up a query-string. For example populating <code>?format=json&amp;dest=/login</code> on a <strong>POST</strong>:</p>
+<p><code>req.query(obj)</code> is a method which may be used to build up a query-string. For example populating <code>?format=json&amp;dest=/login</code> on a <strong>POST</strong>:</p>
 <pre><code class="language-javascript">    request
       .post(&#39;/&#39;)
       .query({ format: &#39;json&#39; })
@@ -443,6 +443,8 @@ Tobi
 <pre><code class="language-javascript">    const response = await request.get(&#39;/some.png&#39;).redirects(2);
 </code></pre>
 <p>Redirects exceeding the limit are treated as errors. Use <code>.ok(res =&gt; res.status &lt; 400)</code> to read them as successful responses.</p>
+<p>Only <code>http:</code> and <code>https:</code> redirect targets are followed; a request made over a Unix domain socket may additionally be redirected within that same socket. A <code>Location</code> header pointing anywhere else (another socket, <code>file:</code>, <code>data:</code>, …) fails the request with an error whose <code>code</code> is <code>EUNSUPPORTEDREDIRECT</code>, and an unparseable <code>Location</code> header fails it with <code>EINVALIDREDIRECT</code>. In both cases <code>err.status</code> holds the redirect status and <code>err.location</code> the offending header value.</p>
+<p>When a redirect changes the origin (scheme, host or port), the <code>Authorization</code> and <code>Cookie</code> headers are dropped, including credentials given with <code>.auth(user, pass, { type: &#39;auto&#39; })</code>; cookies are re-attached per host by <a href="#agents-for-global-state">agents</a>.</p>
 <h2 id="agents-for-global-state">Agents for global state</h2>
 <h3 id="custom-nodejs-http-agents">Custom Node.js HTTP agents</h3>
 <p>For a Node.js request that needs a custom <a href="https://nodejs.org/api/http.html#class-httpagent"><code>http.Agent</code></a>, such as a keep-alive agent, pass it to the request with <code>.agent()</code>. This is distinct from <code>request.agent()</code>, which creates a SuperAgent cookie jar and default-request settings.</p>
@@ -463,6 +465,7 @@ request.get(&#39;https://example.com&#39;).agent(keepAliveAgent).then((res) =&gt
       });
 </code></pre>
 <p>In browsers cookies are managed automatically by the browser, so the <code>.agent()</code> does not isolate cookies.</p>
+<p>The Node cookie jar only stores a cookie for the host that set it, or for a <code>Domain</code> attribute that host belongs to (RFC 6265); a server cannot plant cookies for an unrelated host or for a bare public suffix such as <code>com</code>.</p>
 <h3 id="default-options-for-multiple-requests">Default options for multiple requests</h3>
 <p>Regular request methods called on the agent will be used as defaults for all requests made by that agent.</p>
 <pre><code class="language-javascript">    const agent = request.agent()
@@ -490,7 +493,7 @@ request.get(&#39;https://example.com&#39;).agent(keepAliveAgent).then((res) =&gt
     const req = request.get(&#39;/some.json&#39;);
     req.pipe(stream);
 </code></pre>
-<p> It&#39;s not possible to mix pipes and callbacks or promises. Note that you should <strong>NOT</strong> attempt to pipe the result of <code>.end()</code> or the <code>Response</code> object:</p>
+<p>It&#39;s not possible to mix pipes and callbacks or promises. Note that you should <strong>NOT</strong> attempt to pipe the result of <code>.end()</code> or the <code>Response</code> object:</p>
 <pre><code class="language-javascript">    // Don&#39;t do either of these:
     const stream = getAWritableStream();
     const req = request
@@ -538,6 +541,7 @@ request.get(&#39;https://example.com&#39;).agent(keepAliveAgent).then((res) =&gt
 <h2 id="buffering-responses">Buffering responses</h2>
 <p>To force buffering of response bodies as <code>res.text</code> you may invoke <code>req.buffer()</code>. To undo the default of buffering for text responses such as &quot;text/plain&quot;, &quot;text/html&quot; etc you may invoke <code>req.buffer(false)</code>.</p>
 <p>When buffered the <code>res.buffered</code> flag is provided, you may use this to handle both buffered and unbuffered responses in the same callback.</p>
+<p>Buffered bodies are limited to 200 MB of <em>decompressed</em> data by default; use <code>req.maxResponseSize(bytes)</code> to change that limit. When it is exceeded the request fails with an error whose <code>code</code> is <code>ETOOLARGE</code>, and any decompression in progress is stopped. Unbuffered responses are streamed to you without accumulating anything, so the limit does not apply to them (nor to <code>.pipe()</code>); apply your own bounds when streaming from untrusted servers.</p>
 <h2 id="cors">CORS</h2>
 <p>For security reasons, browsers will block cross-origin requests unless the server opts-in using CORS headers. Browsers will also make extra <strong>OPTIONS</strong> requests to check what HTTP headers and methods are allowed by the server. <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS">Read more about CORS</a>.</p>
 <p>The <code>.withCredentials()</code> method enables the ability to send cookies from the origin, however only when <code>Access-Control-Allow-Origin</code> is <em>not</em> a wildcard (&quot;*&quot;), and <code>Access-Control-Allow-Credentials</code> is &quot;true&quot;.</p>

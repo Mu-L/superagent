@@ -9,6 +9,15 @@
 exports.type = (string_) => string_.split(/ *; */).shift();
 
 /**
+ * Property names that must never be set from values a remote server controls
+ * (header parameters, Link relations), as they would alter the prototype
+ * chain or shadow constructors of the receiving object.
+ */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+exports.isSafeKey = (key) => !UNSAFE_KEYS.has(key);
+
+/**
  * Return header field parameters.
  *
  * @param {String} str
@@ -23,7 +32,7 @@ exports.params = (value) => {
     const key = parts.shift();
     const value = parts.shift();
 
-    if (key && value) object[key] = value;
+    if (key && value && exports.isSafeKey(key)) object[key] = value;
   }
 
   return object;
@@ -46,7 +55,8 @@ exports.parseLinks = (value) => {
       const [key, keyValue] = part.split(/ *= */, 2);
       if (key && key.toLowerCase() === 'rel' && keyValue) {
         const relationship = keyValue.replace(/^"|"$/g, '');
-        if (relationship) object[relationship] = url;
+        if (relationship && exports.isSafeKey(relationship))
+          object[relationship] = url;
         break;
       }
     }
@@ -124,7 +134,8 @@ exports.mixin = (target, source) => {
  */
 
 exports.isGzipOrDeflateEncoding = (res) => {
-  return /^\s*(?:deflate|gzip)\s*$/.test(res.headers['content-encoding']);
+  // content-coding tokens are case-insensitive (RFC 9110 Section 8.4.1)
+  return /^\s*(?:deflate|gzip)\s*$/i.test(res.headers['content-encoding']);
 };
 
 /**
@@ -134,5 +145,5 @@ exports.isGzipOrDeflateEncoding = (res) => {
  */
 
 exports.isBrotliEncoding = (res) => {
-  return /^\s*br\s*$/.test(res.headers['content-encoding']);
+  return /^\s*br\s*$/i.test(res.headers['content-encoding']);
 };

@@ -1,7 +1,7 @@
 /**
  * Module of mixed-in functions shared between node and client code
  */
-const { isObject, hasOwn } = require('./utils');
+const { isObject, hasOwn, isSafeKey } = require('./utils');
 
 /**
  * Expose `RequestBase`.
@@ -642,7 +642,20 @@ RequestBase.prototype.send = function (data) {
     for (const key in data) {
       if (typeof data[key] == 'bigint' && !data[key].toJSON)
         throw new Error('Cannot serialize BigInt value to json');
-      if (hasOwn(data, key)) this._data[key] = data[key];
+      if (!hasOwn(data, key)) continue;
+      if (isSafeKey(key)) {
+        this._data[key] = data[key];
+      } else {
+        // an own "__proto__" key (e.g. from JSON.parse of untrusted input)
+        // must become a plain own property of the payload rather than
+        // replacing the payload's prototype and vanishing from the body
+        Object.defineProperty(this._data, key, {
+          value: data[key],
+          enumerable: true,
+          writable: true,
+          configurable: true
+        });
+      }
     }
   }
   else if (typeof data === 'bigint') throw new Error("Cannot send value of type BigInt");

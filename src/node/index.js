@@ -159,6 +159,70 @@ function preserveDotSegments(urlString) {
 }
 
 /**
+ * Default a scheme-less URL string to http://.
+ *
+ * @param {String} urlString
+ * @return {String}
+ * @api private
+ */
+function withDefaultProtocol(urlString) {
+  return urlString.indexOf('http') === 0 ? urlString : `http://${urlString}`;
+}
+
+/**
+ * Protocols a redirect may lead to. A request made over a Unix domain socket
+ * may additionally be redirected within that same socket (see
+ * `isAllowedRedirectTarget`).
+ */
+const REDIRECT_PROTOCOLS = new Set(['http:', 'https:']);
+const UNIX_SOCKET_PROTOCOLS = new Set(['http+unix:', 'https+unix:']);
+
+/**
+ * Whether a redirect from `current` to `target` may be followed.
+ *
+ * Only http(s) targets are followed. A remote server must never be able to
+ * steer the client into a local Unix domain socket (`http+unix://`) or any
+ * other scheme through a Location header; a request that was itself made over
+ * a Unix domain socket may only be redirected within that same socket.
+ *
+ * @param {URL} current
+ * @param {URL} target
+ * @return {Boolean}
+ * @api private
+ */
+function isAllowedRedirectTarget(current, target) {
+  if (REDIRECT_PROTOCOLS.has(target.protocol)) return true;
+
+  return (
+    UNIX_SOCKET_PROTOCOLS.has(target.protocol) &&
+    target.protocol === current.protocol &&
+    target.hostname !== '' &&
+    target.hostname === current.hostname
+  );
+}
+
+/**
+ * Whether two URLs share an origin. Unix socket URLs have an opaque (`null`)
+ * WHATWG origin, so they are compared by protocol and socket path instead.
+ *
+ * @param {URL} current
+ * @param {URL} target
+ * @return {Boolean}
+ * @api private
+ */
+function isSameOrigin(current, target) {
+  if (current.origin !== 'null' && target.origin !== 'null') {
+    return current.origin === target.origin;
+  }
+
+  return (
+    current.protocol === target.protocol &&
+    current.hostname === target.hostname &&
+    current.port === target.port
+  );
+}
+
+/**
  * Expose `Response`.
  */
 
@@ -213,6 +277,22 @@ exports.serialize = {
  */
 
 exports.parse = require('./parsers');
+
+/**
+ * The default parsers as shipped; they only accumulate a buffered body, so
+ * they are skipped for unbuffered responses (see `_end`). Captured here so
+ * that a parser a user installs under the same key is still honoured.
+ */
+const BUILT_IN_PARSERS = {
+  'application/x-www-form-urlencoded':
+    exports.parse['application/x-www-form-urlencoded'],
+  'application/json': exports.parse['application/json'],
+  text: exports.parse.text,
+  image: exports.parse.image
+};
+const BUFFERING_PARSERS = new Set(
+  Object.keys(BUILT_IN_PARSERS).map((key) => BUILT_IN_PARSERS[key])
+);
 
 /**
  * Default buffering map. Can be used to set certain
@@ -614,18 +694,46 @@ Request.prototype._redirect = function (res) {
 
   debug('redirect %s -> %s', this.url, url);
 
-  // location
-  url = new URL(url, this.url).href;
-
   // ensure the response is being consumed
   // this is required for Node v0.10+
   res.resume();
+
+  // location
+  //
+  // The Location header is attacker controlled: a malformed value must not
+  // throw out of the response event (which would crash the process), and only
+  // http(s) targets may be followed. A remote server must never be able to
+  // steer the client into a local Unix domain socket or another scheme.
+  let target;
+  let current;
+  try {
+    current = new URL(withDefaultProtocol(this.url));
+    target = new URL(url, current);
+  } catch (err) {
+    const error = new Error(`Invalid redirect location: ${url}`);
+    error.code = 'EINVALIDREDIRECT';
+    error.status = res.statusCode;
+    error.location = url;
+    return this.callback(error, res);
+  }
+
+  if (!isAllowedRedirectTarget(current, target)) {
+    const error = new Error(
+      `Unsupported protocol in redirect location: ${target.href}`
+    );
+    error.code = 'EUNSUPPORTEDREDIRECT';
+    error.status = res.statusCode;
+    error.location = url;
+    return this.callback(error, res);
+  }
+
+  url = target.href;
 
   this._emitPreRedirect(res);
 
   let headers = this.req.getHeaders ? this.req.getHeaders() : this.req._headers;
 
-  const changesOrigin = new URL(url).origin !== new URL(this.url).origin;
+  const changesOrigin = !isSameOrigin(current, target);
 
   // implementation of 302 following defacto standard
   if (res.statusCode === 301 || res.statusCode === 302) {
@@ -658,6 +766,14 @@ Request.prototype._redirect = function (res) {
   if ((res.statusCode === 307 || res.statusCode === 308) && changesOrigin) {
     delete headers.authorization;
     delete headers.cookie;
+  }
+
+  // credentials given with `.auth(user, pass, { type: 'auto' })` are turned
+  // into an Authorization header by every `request()` call, so they must be
+  // dropped as well or they would be re-sent to the new origin
+  if (changesOrigin) {
+    this.username = undefined;
+    this.password = undefined;
   }
 
   delete headers.host;
@@ -814,11 +930,9 @@ Request.prototype.request = function () {
     return this.emit('error', err);
   }
 
-  let { url: urlString } = this;
+  const urlString = withDefaultProtocol(this.url);
   const retries = this._retries;
 
-  // default to http://
-  if (urlString.indexOf('http') !== 0) urlString = `http://${urlString}`;
   const protectedUrl = preserveDotSegments(urlString);
   const url = new URL(protectedUrl.urlString);
   let { protocol } = url;
@@ -844,10 +958,11 @@ Request.prototype.request = function () {
   // Override IP address of a hostname
   if (this._connectOverride) {
     const { hostname } = url;
-    const match =
-      hostname in this._connectOverride
-        ? this._connectOverride[hostname]
-        : this._connectOverride['*'];
+    // the hostname may come from a redirect, so never let an inherited key
+    // such as "constructor" act as an override entry
+    const match = hasOwn(this._connectOverride, hostname)
+      ? this._connectOverride[hostname]
+      : this._connectOverride['*'];
     if (match) {
       // backup the real host
       if (!this._header.host) {
@@ -1202,7 +1317,11 @@ Request.prototype._end = function () {
         let contentType = req.getHeader('Content-Type');
         // Parse out just the content type from the header (ignore the charset)
         if (contentType) contentType = contentType.split(';')[0];
-        let serialize = this._serializer || exports.serialize[contentType];
+        let serialize =
+          this._serializer ||
+          (hasOwn(exports.serialize, contentType)
+            ? exports.serialize[contentType]
+            : undefined);
         if (!serialize && isJSON(contentType)) {
           serialize = exports.serialize['application/json'];
         }
@@ -1265,12 +1384,13 @@ Request.prototype._end = function () {
     }
 
     // zlib support
+    let decompresser = null;
     if (this._shouldDecompress(res)) {
-      decompress(req, res);
+      decompresser = decompress(req, res);
     }
 
     let buffer = this._buffer;
-    if (buffer === undefined && mime in exports.buffer) {
+    if (buffer === undefined && hasOwn(exports.buffer, mime)) {
       buffer = Boolean(exports.buffer[mime]);
     }
 
@@ -1336,7 +1456,9 @@ Request.prototype._end = function () {
       } else if (isBinary(mime)) {
         parser = exports.parse.image;
         buffer = buffer !== false; // For backwards-compatibility buffering default is ad-hoc MIME-dependent
-      } else if (exports.parse[mime]) {
+      } else if (hasOwn(exports.parse, mime)) {
+        // `mime` is attacker controlled; an inherited key such as
+        // "constructor" must not resolve to a parser
         parser = exports.parse[mime];
       } else if (type === 'text') {
         parser = exports.parse.text;
@@ -1361,16 +1483,27 @@ Request.prototype._end = function () {
     this._resBuffered = buffer;
     let parserHandlesEnd = false;
     if (buffer) {
-      // Protectiona against zip bombs and other nuisance
+      // Protection against zip bombs and other nuisance
       let responseBytesLeft = this._maxResponseSize || 200000000;
+      let exceeded = false;
       res.on('data', (buf) => {
-        responseBytesLeft -= buf.byteLength || buf.length > 0 ? buf.length : 0;
+        if (exceeded) return;
+        // Parsers may have called `setEncoding()`, in which case chunks are
+        // strings: count their encoded size rather than their UTF-16 length
+        responseBytesLeft -= Buffer.isBuffer(buf)
+          ? buf.length
+          : Buffer.byteLength(String(buf));
         if (responseBytesLeft < 0) {
+          exceeded = true;
           const error = new Error('Maximum response size reached');
           error.code = 'ETOOLARGE';
           // Parsers aren't required to observe error event,
           // so would incorrectly report success
           parserHandlesEnd = false;
+          // A decompression bomb keeps inflating (and emitting) long after
+          // the compressed input was consumed; stop it here so the limit
+          // also bounds CPU and avoids a flood of late callbacks.
+          if (decompresser) decompresser.destroy();
           // Destroy without an error: IncomingMessage.destroy(err) emits
           // 'error', and the parser may also fail, each of which would
           // call callback() again ("superagent: double callback bug").
@@ -1378,6 +1511,22 @@ Request.prototype._end = function () {
           this.callback(error, null);
         }
       });
+    }
+
+    if (parser && !buffer && BUFFERING_PARSERS.has(parser)) {
+      // The built-in parsers exist only to accumulate the body. When the
+      // response is not buffered (`.buffer(false)`, or an unbuffered default
+      // such as application/octet-stream) they would still collect the entire
+      // stream in memory, without any size limit, while the response has
+      // already been handed out to the caller. Keep only the encoding they
+      // would have applied so `res.on('data')` consumers see the same chunks.
+      if (parser === BUILT_IN_PARSERS['application/x-www-form-urlencoded']) {
+        res.setEncoding('ascii');
+      } else if (parser !== BUILT_IN_PARSERS.image) {
+        res.setEncoding('utf8');
+      }
+
+      parser = null;
     }
 
     if (parser) {

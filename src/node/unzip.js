@@ -9,13 +9,17 @@ const { chooseDecompresser } = require('./decompress');
 /**
  * Buffers response data events and re-emits when they're decompressed.
  *
+ * Returns the decompression stream so the caller can destroy it (for example
+ * when a decompression bomb exceeds the maximum response size).
+ *
  * @param {Request} req
  * @param {Response} res
+ * @return {zlib.Unzip|zlib.BrotliDecompress}
  * @api private
  */
 
 exports.decompress = (request, res) => {
-  let decompresser = chooseDecompresser(res);
+  const decompresser = chooseDecompresser(res);
 
   const stream = new Stream();
   let decoder;
@@ -43,6 +47,7 @@ exports.decompress = (request, res) => {
 
   // decode upon decompressing with captured encoding
   decompresser.on('data', (buf) => {
+    if (decompresser.destroyed) return;
     if (decoder) {
       const string_ = decoder.write(buf);
       if (string_.length > 0) stream.emit('data', string_);
@@ -69,4 +74,6 @@ exports.decompress = (request, res) => {
 
     return this;
   };
+
+  return decompresser;
 };
