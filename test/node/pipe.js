@@ -47,6 +47,10 @@ app.post('/', (request_, res) => {
   }
 });
 
+app.post('/early-response', (request_, res) => {
+  res.json({ ok: true });
+});
+
 app.post('/slow', (request_, res) => {
   setTimeout(() => {
     request_.resume();
@@ -84,6 +88,32 @@ describe('request pipe', () => {
       done();
     });
 
+    stream.pipe(request_);
+  });
+
+  it('should handle a response before the request stream ends', (done) => {
+    let chunkSent = false;
+    const stream = new Readable({
+      read() {
+        if (chunkSent) return;
+
+        chunkSent = true;
+        this.push(Buffer.from('{"name":"tobi"}'));
+        setTimeout(() => this.push(null), 100);
+      }
+    });
+    const request_ = request.post(`${base}/early-response`).type('json');
+
+    request_.on('response', (res) => {
+      try {
+        res.body.should.eql({ ok: true });
+        done();
+      } catch (err) {
+        done(err);
+      }
+    });
+    request_.on('error', done);
+    stream.on('error', done);
     stream.pipe(request_);
   });
 

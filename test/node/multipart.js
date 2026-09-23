@@ -158,6 +158,21 @@ describe('Multipart', () => {
             (err) => err.code.should.equal('ENOENT')
           );
       });
+
+      it('should report getLength errors before streaming', (done) => {
+        const request_ = request
+          .post(`${base}/echo`)
+          .attach('name', Buffer.from('fixture'), 'fixture.txt');
+        const inputError = new Error('ENOENT: fixture.txt');
+        inputError.code = 'ENOENT';
+        inputError.path = 'fixture.txt';
+        request_._formData.getLength = (callback) => callback(inputError);
+
+        request_.end((error) => {
+          assert.strictEqual(error, inputError);
+          done();
+        });
+      });
     });
   });
 

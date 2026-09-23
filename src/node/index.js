@@ -78,6 +78,11 @@ function disposeNodeRequest(request_) {
   }
 
   request_._requestDisposed = true;
+  if (request_._streamResponseListener) {
+    req.removeListener('response', request_._streamResponseListener);
+    request_._streamResponseListener = undefined;
+    request_._streamResponse = undefined;
+  }
 
   try {
     // HTTP/2 wrapper keeps a session open as soon as request() is called.
@@ -516,6 +521,10 @@ Request.prototype.write = function (data, encoding) {
   const request_ = this.request();
   if (!this._streamRequest) {
     this._streamRequest = true;
+    this._streamResponseListener = (res) => {
+      this._streamResponse = res;
+    };
+    request_.once('response', this._streamResponseListener);
   }
 
   return request_.write(data, encoding);
@@ -1213,9 +1222,17 @@ Request.prototype._end = function () {
     }
   }
 
+  let streamResponse;
+  if (this._streamResponseListener) {
+    req.removeListener('response', this._streamResponseListener);
+    this._streamResponseListener = undefined;
+    streamResponse = this._streamResponse;
+    this._streamResponse = undefined;
+  }
+
   // response
   // eslint-disable-next-line complexity
-  req.once('response', (res) => {
+  const handleResponse = (res) => {
     debug('%s %s -> %s', this.method, this.url, res.statusCode);
 
     if (this._responseTimeoutTimer) {
@@ -1437,7 +1454,13 @@ Request.prototype._end = function () {
         this.emit('end');
         this.callback(null, this._emitResponse());
       });
-  });
+  };
+
+  if (streamResponse) {
+    process.nextTick(handleResponse, streamResponse);
+  } else {
+    req.once('response', handleResponse);
+  }
 
   this.emit('request', this);
 
@@ -1498,8 +1521,12 @@ Request.prototype._end = function () {
 
       // attempt to get "Content-Length" header
       formData.getLength((error, length) => {
-        // TODO: Add chunked encoding when no length (if err)
-        if (error) debug('formData.getLength had error', error, length);
+        // Unknown stream lengths can use chunked encoding, but filesystem
+        // errors must fail before a partial multipart request is sent.
+        if (error && error !== 'Unknown stream') {
+          this._failRequest(error);
+          return;
+        }
 
         debug('got FormData Content-Length: %s', length);
         if (typeof length === 'number') {
