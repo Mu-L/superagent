@@ -218,10 +218,7 @@ describe('req.query(Object)', () => {
 
     // wait until stream is valid before piping
     stream.on('open', () => {
-      // wait until request_ is ready before piping
-      setTimeout(() => {
-        stream.pipe(request_);
-      }, 10);
+      stream.pipe(request_);
     });
   });
 });
